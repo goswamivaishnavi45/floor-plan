@@ -149,6 +149,7 @@ AI_BIAS = 1.35               # the depth model reads this many times too far on 
                              # recordings). One home only: the video ranges must cover
                              # the chance that another home differs.
 DEPTH_FRAMES = 20            # AI depth is slow on CPU (~1.7 s), so use up to 20 frames a piece
+DEPTH_BUDGET = 240           # and at most this many in total, shared by piece size (~7 min)
 MIN_SPOTS = 20               # a frame needs this many COLMAP spots to measure its ratio
 FUSE_SIZE = (192, 256)       # (w, h) of the depth maps turned into points, like LiDAR's grid
 BOX_TOLERANCE = 10.0         # degrees: a surface faces a box direction if within this
@@ -162,7 +163,7 @@ def spot_depths(camera, spots):
     return (spots - camera["center"]) @ camera["R"][:, 2]
 
 
-def scale_piece(piece, frame_images, model):
+def scale_piece(piece, frame_images, model, count=DEPTH_FRAMES):
     """Give a piece its real size (part 6c, step 1).
 
     For up to DEPTH_FRAMES frames of the piece, run the AI depth model and
@@ -174,7 +175,7 @@ def scale_piece(piece, frame_images, model):
     rescaled to agree with COLMAP exactly.
     """
     indices = sorted(piece["cameras"])
-    chosen = [indices[k] for k in np.linspace(0, len(indices) - 1, min(DEPTH_FRAMES, len(indices))).astype(int)]
+    chosen = [indices[k] for k in np.linspace(0, len(indices) - 1, min(count, len(indices))).astype(int)]
     piece["depth"], piece["ratio"] = {}, {}
     for index in dict.fromkeys(chosen):
         xy, xyz = piece["spots"][index]
@@ -315,3 +316,101 @@ def piece_points(piece, frame_images):
     piece["to_level"] = level
     points, colours, _ = voxel_downsample(points, colours, np.ones(len(points)), VOXEL)
     return points, colours
+
+
+# Part 6d: chain the pieces in time order into one cloud.
+VIDEO_FRAMES = 400           # frames handed to COLMAP (about 4 per second of a 1-2 min video)
+
+
+def piece_camera_track(piece, frame_index):
+    """Position (metres, levelled frame) and heading (yaw, degrees) of one
+    of the piece's cameras. Heading is the horizontal direction it looks."""
+    cam = piece["cameras"][frame_index]
+    position = piece["to_level"] @ (piece["metres_per_unit"] * cam["center"])
+    forward = piece["to_level"] @ cam["R"][:, 2]
+    return position, float(np.degrees(np.arctan2(forward[0], forward[2])))
+
+
+def chain_pieces(pieces, frame_images, log=print):
+    """Join the pieces into one cloud, in time order (part 6d).
+
+    A gap between pieces is a moment where COLMAP lost track, usually a
+    second or two of plain wall, in which the person barely moved. So each
+    piece is placed to start where the previous one ended:
+    - its floor is set to height 0 (all floors in a home are level),
+    - its walls are straightened (part 4a), which leaves only a choice of
+      quarter turn; we take the quarter turn that keeps the camera's
+      heading continuous across the gap,
+    - it is shifted so its first camera sits on the previous last camera.
+    Pieces that could not be scaled or are implausibly tilted are skipped
+    (the chain continues from the last good piece). The gap assumption
+    costs a few tens of cm per gap; the error grows with the number of gaps.
+    Returns (points, colours, report).
+    """
+    from src.layout import find_rotation, rotate_about_vertical
+    from src.pointcloud import horizontal_levels
+
+    all_points, all_colours, report = [], [], []
+    previous = None   # (position, heading) of the last camera placed
+    for n, piece in enumerate(pieces):
+        frames = sorted(piece["cameras"])
+        row = {"piece": n, "frames": f"{frames[0]}-{frames[-1]}", "placed": len(frames)}
+        if piece.get("metres_per_unit") is None:
+            row["skipped"] = "too few COLMAP spots to give it a size"
+            report.append(row)
+            continue
+        points, colours = piece_points(piece, frame_images)
+        if points is None:
+            row["skipped"] = piece["rejected"]
+            report.append(row)
+            continue
+
+        floor_y, ceiling_y = horizontal_levels(points)
+        points[:, 1] -= floor_y
+        angle, *_ = find_rotation(points, 0.0, None if ceiling_y is None else ceiling_y - floor_y)
+        first_pos, first_heading = piece_camera_track(piece, frames[0])
+        last_pos, last_heading = piece_camera_track(piece, frames[-1])
+        if previous is not None:
+            # Of the four quarter turns, keep the one that best continues the heading.
+            turns = [angle + 90 * k for k in range(4)]
+            angle = min(turns, key=lambda a: abs((first_heading + a - previous[1] + 180) % 360 - 180))
+        points = rotate_about_vertical(points, angle)
+        ends = rotate_about_vertical(np.array([first_pos, last_pos]) - [0, floor_y, 0], angle)
+        target = np.zeros(3) if previous is None else previous[0]
+        shift = np.array([target[0] - ends[0][0], 0.0, target[2] - ends[0][2]])
+        points += shift
+        previous = (ends[1] + shift, last_heading + angle)
+        all_points.append(points)
+        all_colours.append(colours)
+        row.update({"metres_per_unit": round(piece["metres_per_unit"], 4), "points": len(points)})
+        report.append(row)
+        log(f"      piece {n}: frames {row['frames']}, {len(points):,} points")
+    if not all_points:
+        return None, None, report
+    return np.concatenate(all_points), np.concatenate(all_colours), report
+
+
+def build_video_cloud(video_path, workdir, rotate=None, log=print):
+    """Video file -> one coloured point cloud in metres (parts 6a-6d).
+    `rotate` is a cv2 rotation for videos stored sideways (Stray Scanner's
+    rgb.mp4); videos from the iPhone Camera app carry an orientation flag
+    that OpenCV applies when reading, so they need none."""
+    from src.mono_depth import DepthModel
+
+    frames = pick_frames(video_path, VIDEO_FRAMES)
+    if rotate is not None:
+        frames = [(i, cv2.rotate(f, rotate)) for i, f in frames]
+    images = dict(frames)
+    log(f"      {len(frames)} sharp frames picked; matching them with COLMAP")
+    pieces = reconstruct_pieces(frames, Path(workdir) / "colmap")
+    placed = sum(len(p["cameras"]) for p in pieces)
+    log(f"      COLMAP placed {placed} frames in {len(pieces)} pieces; measuring depth")
+
+    model = DepthModel()
+    for piece in pieces:
+        share = round(DEPTH_BUDGET * len(piece["cameras"]) / max(placed, 1))
+        scale_piece(piece, images, model, count=max(3, min(DEPTH_FRAMES, share)))
+    points, colours, report = chain_pieces(pieces, images, log)
+    info = {"frames": len(frames), "frames_placed": placed, "pieces": len(pieces),
+            "pieces_used": sum(1 for r in report if "skipped" not in r), "per_piece": report}
+    return points, colours, info

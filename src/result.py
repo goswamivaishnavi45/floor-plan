@@ -132,7 +132,19 @@ def outline_walls(room_name, outline, room, detected_edges=None):
     return entries
 
 
-def build_result(layout, grid, room_labels, capture_info):
+def widen(m, relative_sigma, power=1):
+    """Add a size uncertainty to a measurement's 95% range. Lengths scale with
+    the size factor (power 1), areas with its square (power 2, so twice the
+    relative error)."""
+    if m["value"] is None:
+        return
+    extra = 2 * power * relative_sigma * abs(m["value"])
+    m["pm95"] = round(float(np.hypot(m["pm95"] or 0.0, extra)), 3)
+
+
+def build_result(layout, grid, room_labels, capture_info, scale_sigma=0.0):
+    """scale_sigma: relative 1-sigma uncertainty of the overall size, for tiers
+    whose metres come from an AI depth model (video, photo); 0 for LiDAR."""
     walls = layout["walls"]
     result = {
         "schema_version": "1.0",
@@ -206,6 +218,19 @@ def build_result(layout, grid, room_labels, capture_info):
     total_pm95 = float(np.sqrt(sum(p ** 2 for _, p in areas)))
     result["property"] = {"room_count": len(result["rooms"]),
                           "total_floor_area": measure(total, total_pm95)}
+
+    if scale_sigma:
+        for room in result["rooms"]:
+            for key in ("width", "length", "ceiling_height"):
+                widen(room[key], scale_sigma)
+            widen(room["floor_area"], scale_sigma, power=2)
+            for wall in room["walls"]:
+                widen(wall["length"], scale_sigma)
+        for opening in result["openings"]:
+            widen(opening["width"], scale_sigma)
+        widen(result["property"]["total_floor_area"], scale_sigma, power=2)
+        result["warnings"].insert(0, f"Sizes come from an AI depth model; every range includes a "
+                                     f"{100 * scale_sigma:.0f}% (1 sigma) size uncertainty.")
     return result
 
 

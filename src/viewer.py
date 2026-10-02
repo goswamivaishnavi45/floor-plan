@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-MAX_POINTS = 300_000   # browsers stay smooth up to a few hundred thousand points
+MAX_POINTS = 1_500_000   # keeps the page under ~30 MB and smooth on a laptop
 
 
 def read_ply(path):
@@ -33,7 +33,7 @@ def read_ply(path):
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>{title}</title>
 <style>
-  body {{ margin: 0; overflow: hidden; background: #f4f4f2; font-family: system-ui, sans-serif; }}
+  body {{ margin: 0; overflow: hidden; background: #1d1f21; font-family: system-ui, sans-serif; }}
   #panel {{ position: absolute; top: 12px; left: 12px; background: #fff; padding: 10px 14px;
            border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 14px; }}
   #panel input {{ width: 220px; }}
@@ -59,9 +59,9 @@ geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3, true));
 geometry.computeBoundingSphere();
 
 const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), {ymax});
-const material = new THREE.PointsMaterial({{ size: 0.025, vertexColors: true, clippingPlanes: [cut] }});
+const material = new THREE.PointsMaterial({{ size: 0.018, vertexColors: true, clippingPlanes: [cut] }});
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf4f4f2);
+scene.background = new THREE.Color(0x1d1f21);
 scene.add(new THREE.Points(geometry, material));
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 200);

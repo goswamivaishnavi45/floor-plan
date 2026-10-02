@@ -1,0 +1,12 @@
+# Python virtual environment (each machine creates its own)
+.venv/
+
+# Raw recordings are large (~1.5 GB); they are fetched separately, not stored in git
+data/*/
+
+# Generated results are rebuilt by running the pipeline
+outputs/
+preview/
+
+__pycache__/
+*.pyc

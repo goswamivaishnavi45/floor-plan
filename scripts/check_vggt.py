@@ -75,13 +75,20 @@ def main():
     started = time.time()
     model = VGGT.from_pretrained(str(MODEL_DIR)).eval()
     loaded = time.time()
-    images = load_and_preprocess_images(paths)            # (S, 3, H, W), width 518
+    # "pad" keeps every pixel: the long side becomes 518 px and the short side
+    # is padded with white to a square. (The default "crop" cuts the top and
+    # bottom off, which would misalign the comparison with LiDAR.)
+    images = load_and_preprocess_images(paths, mode="pad")   # (S, 3, 518, 518)
+    full_h, full_w = frames[indices[0]].shape[:2]
+    content_w = round(full_w * (518 / full_h) / 14) * 14 if full_h >= full_w else 518
+    content_h = 518 if full_h >= full_w else round(full_h * (518 / full_w) / 14) * 14
+    left, top = (518 - content_w) // 2, (518 - content_h) // 2
     with torch.no_grad():
         pred = model(images)
     finished = time.time()
     extrinsic, intrinsic = pose_encoding_to_extri_intri(pred["pose_enc"], images.shape[-2:])
     extrinsic, intrinsic = extrinsic[0].numpy(), intrinsic[0].numpy()
-    depth = pred["depth"][0, ..., 0].numpy()               # (S, H, W)
+    depth = pred["depth"][0, ..., 0].numpy()[:, top:top + content_h, left:left + content_w]
 
     report = {"frames": len(indices), "input_size": list(images.shape[-2:]),
               "seconds_load": round(loaded - started, 1), "seconds_run": round(finished - loaded, 1),
@@ -99,8 +106,7 @@ def main():
 
     # Focal length vs the true one (VGGT works on a resized image).
     true_f = capture.K_depth[indices[0]][0, 0] * 1920 / 256
-    width_full = frames[indices[0]].shape[1]
-    report["focal_error_pct"] = round(float(100 * (intrinsic[0, 0, 0] * width_full / images.shape[-1] / true_f - 1)), 2)
+    report["focal_error_pct"] = round(float(100 * (intrinsic[0, 0, 0] * full_w / content_w / true_f - 1)), 2)
 
     # Depth vs LiDAR, in the LiDAR's 256x192 grid.
     ratios, p_all, l_all = [], [], []

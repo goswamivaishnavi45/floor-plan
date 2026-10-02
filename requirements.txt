@@ -5,3 +5,6 @@ torch
 transformers
 pillow
 pycolmap
+torchvision
+psutil
+vggt @ git+https://github.com/facebookresearch/vggt

@@ -45,6 +45,17 @@ MIN_PROMINENCE = 1.5     # a wall is thin: its +-2 cm core must hold at least 1.
                          # points per cm of the strips 4-7 cm to either side. Thick blocks
                          # (wardrobes, pillars, door frames) are evenly dense and fail.
 
+# Room settings (part 4c)
+GRID = 0.05              # the paint-bucket grid: one square = 5 cm x 5 cm of floor
+FLOOR_TOLERANCE = 0.08   # floor points lie within +-8 cm of the floor height
+                         # (the floor varies by ~6 cm across rooms, see Stage 8)
+FLOOR_FILL = 0.30        # fill holes in the seen floor up to 30 cm (chair legs, bins)
+WALL_EXTEND = 0.15       # stretch wall ends by 15 cm so corners close
+ALIGN_TOLERANCE = 0.15   # two walls this close sideways count as one line
+CLOSE_AS_WALL = 0.60     # gaps shorter than this are holes in a wall: close them
+DOOR_MIN, DOOR_MAX = 0.60, 1.20   # gaps this wide are doorways: close and record them
+MIN_ROOM_AREA = 1.5      # m^2; smaller painted areas are corners or clutter
+
 
 def rotate_about_vertical(points, angle_deg):
     """Turn points about the y (up) axis by angle_deg. Heights are unchanged."""
@@ -228,6 +239,172 @@ def draw_walls(points, floor_y, ceiling_y, walls, path, cell=0.02):
     cv2.imwrite(str(path), image)
 
 
+def wall_point(wall, along):
+    """(x, z) of the point at `along` on a wall's centre line."""
+    return (wall["position"], along) if wall["axis"] == "x" else (along, wall["position"])
+
+
+def find_gaps(walls):
+    """Gaps between wall ends that must be closed before painting.
+
+    From each wall end, look straight ahead along the wall for the nearest
+    wall within DOOR_MAX: either the next piece on the same line, or a wall
+    crossing the line. Shorter than CLOSE_AS_WALL is a hole in the wall
+    (glass, missing points, a corner that does not quite meet); DOOR_MIN to
+    DOOR_MAX is a doorway. Returns dicts with the two gap ends, width and kind.
+    """
+    gaps = {}
+    for w in walls:
+        for end, direction in ((w["end"], 1), (w["start"], -1)):
+            best = None
+            for v in walls:
+                if v is w:
+                    continue
+                if v["axis"] == w["axis"]:
+                    if abs(v["position"] - w["position"]) > ALIGN_TOLERANCE:
+                        continue
+                    facing = v["start"] if direction > 0 else v["end"]
+                    target_along, target = facing, wall_point(v, facing)
+                else:
+                    if not v["start"] - ALIGN_TOLERANCE <= w["position"] <= v["end"] + ALIGN_TOLERANCE:
+                        continue
+                    target_along = v["position"]
+                    target = wall_point(w, target_along)
+                distance = (target_along - end) * direction
+                if 0 <= distance <= DOOR_MAX and (best is None or distance < best[0]):
+                    best = (distance, target)
+            if best is None:
+                continue
+            width, target = best
+            a = wall_point(w, end)
+            key = tuple(sorted([tuple(np.round(a, 1)), tuple(np.round(target, 1))]))
+            if key not in gaps:
+                gaps[key] = {"a": [round(float(c), 3) for c in a],
+                             "b": [round(float(c), 3) for c in target],
+                             "width": round(float(width), 3),
+                             "kind": "door" if width >= DOOR_MIN else "wall"}
+    return list(gaps.values())
+
+
+class Grid:
+    """Maps plan coordinates (x, z) to cells of the 5 cm paint-bucket grid."""
+
+    def __init__(self, points):
+        xz = points[:, [0, 2]]
+        self.origin = xz.min(axis=0) - 0.2
+        self.shape = tuple(np.ceil((xz.max(axis=0) + 0.2 - self.origin) / GRID).astype(int)[::-1])
+
+    def cell(self, x, z):
+        return int((x - self.origin[0]) / GRID), int((z - self.origin[1]) / GRID)
+
+    def cells(self, xz):
+        return ((xz - self.origin) / GRID).astype(int).T   # (columns, rows)
+
+
+def find_rooms(points, floor_y, walls):
+    """Paint-bucket rooms: floor that is enclosed by walls and closed gaps.
+
+    1. Mark every grid square where floor was seen; fill small holes.
+    2. Draw walls (stretched at the ends) and all gaps as barriers.
+    3. Every connected patch of floor not crossed by a barrier is a room.
+    Returns (grid, label image, rooms, gaps).
+    """
+    grid = Grid(points)
+    on_floor = np.abs(points[:, 1] - floor_y) <= FLOOR_TOLERANCE
+    cols, rows = grid.cells(points[on_floor][:, [0, 2]])
+    floor = np.zeros(grid.shape, np.uint8)
+    floor[rows, cols] = 1
+    size = int(round(FLOOR_FILL / GRID)) | 1
+    floor = cv2.morphologyEx(floor, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
+
+    gaps = find_gaps(walls)
+    barrier = np.zeros(grid.shape, np.uint8)
+    for w in walls:
+        a = grid.cell(*wall_point(w, w["start"] - WALL_EXTEND))
+        b = grid.cell(*wall_point(w, w["end"] + WALL_EXTEND))
+        cv2.line(barrier, a, b, 1, 2)
+    for g in gaps:
+        cv2.line(barrier, grid.cell(*g["a"]), grid.cell(*g["b"]), 1, 2)
+
+    free = (floor & (1 - barrier)).astype(np.uint8)
+    count, labels = cv2.connectedComponents(free, connectivity=4)
+
+    rooms, room_labels = [], np.zeros_like(labels)
+    for label in range(1, count):
+        patch = (labels == label).astype(np.uint8)
+        # Fill holes inside the room (furniture the floor was hidden under).
+        contours, _ = cv2.findContours(patch, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filled = np.zeros_like(patch)
+        cv2.drawContours(filled, contours, -1, 1, cv2.FILLED)
+        filled &= 1 - barrier
+        area = filled.sum() * GRID * GRID
+        if area < MIN_ROOM_AREA:
+            continue
+        room_id = len(rooms) + 1
+        room_labels[filled.astype(bool) & (room_labels == 0)] = room_id
+        r, c = np.nonzero(filled)
+        rooms.append({"id": room_id, "area_m2_rough": round(float(area), 2),
+                      "centre": [round(float(grid.origin[0] + (c.mean() + 0.5) * GRID), 2),
+                                 round(float(grid.origin[1] + (r.mean() + 0.5) * GRID), 2)]})
+
+    def rooms_beside(x, z, across):
+        """Room ids found 12 cm either side of a point, across = unit (dx, dz)."""
+        found = set()
+        for side in (-1, 1):
+            c, r = grid.cell(x + side * 0.12 * across[0], z + side * 0.12 * across[1])
+            if 0 <= r < grid.shape[0] and 0 <= c < grid.shape[1] and room_labels[r, c]:
+                found.add(int(room_labels[r, c]))
+        return found
+
+    for n, w in enumerate(walls):
+        across = (1, 0) if w["axis"] == "x" else (0, 1)
+        touching = set()
+        for along in np.linspace(w["start"], w["end"], 7)[1:-1]:
+            touching |= rooms_beside(*wall_point(w, along), across)
+        for room_id in touching:
+            rooms[room_id - 1].setdefault("walls", []).append(n)
+    for n, g in enumerate(gaps):
+        if g["kind"] != "door":
+            continue
+        dx, dz = g["b"][0] - g["a"][0], g["b"][1] - g["a"][1]
+        across = (abs(dz) > abs(dx), abs(dx) >= abs(dz))   # perpendicular to the doorway
+        g["rooms"] = sorted(rooms_beside((g["a"][0] + g["b"][0]) / 2, (g["a"][1] + g["b"][1]) / 2, across))
+    return grid, room_labels, rooms, gaps
+
+
+def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
+    """Each room in its own colour, walls black, wall-gaps grey, doors red."""
+    scale = 2   # draw at 2.5 cm per pixel so labels are readable
+    image = np.full(grid.shape + (3,), 255, np.uint8)
+    palette = [(255, 205, 210), (200, 230, 201), (187, 222, 251), (255, 236, 179), (225, 190, 231),
+               (178, 235, 242), (255, 204, 188), (220, 237, 200), (209, 196, 233), (240, 244, 195)]
+    for room in rooms:
+        image[room_labels == room["id"]] = palette[(room["id"] - 1) % len(palette)]
+    image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+
+    def px(x, z):
+        c, r = grid.cell(x, z)
+        return c * scale, r * scale
+
+    for w in walls:
+        cv2.line(image, px(*wall_point(w, w["start"])), px(*wall_point(w, w["end"])), (40, 40, 40), 3)
+    for g in gaps:
+        colour, width = ((0, 0, 220), 3) if g["kind"] == "door" else ((150, 150, 150), 2)
+        cv2.line(image, px(*g["a"]), px(*g["b"]), colour, width)
+    for room in rooms:
+        x, y = px(*room["centre"])
+        cv2.putText(image, f"R{room['id']}", (x - 14, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(image, f"{room['area_m2_rough']:.1f} m2", (x - 24, y + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+    length = int(round(1.0 / GRID)) * scale
+    h = image.shape[0]
+    cv2.line(image, (20, h - 20), (20 + length, h - 20), (0, 0, 0), 3)
+    cv2.putText(image, "1 m", (20, h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+    cv2.putText(image, "red = door  grey = closed hole in wall", (20, 22),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.imwrite(str(path), image)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("folder", help="output folder containing pointcloud.ply")
@@ -244,13 +421,19 @@ def main():
     walls = find_walls(straight, floor_y, ceiling_y)
     draw_walls(straight, floor_y, ceiling_y, walls, folder / "walls_found.png")
 
+    grid, room_labels, rooms, gaps = find_rooms(straight, floor_y, walls)
+    draw_rooms(grid, room_labels, rooms, walls, gaps, folder / "rooms.png")
+
     layout_path = folder / "layout.json"
     layout = json.loads(layout_path.read_text()) if layout_path.exists() else {}
     layout["rotation_deg"] = round(angle, 2)
     layout["walls"] = walls
+    layout["rooms"] = rooms
+    layout["gaps"] = gaps
     layout_path.write_text(json.dumps(layout, indent=2))
-    print(f"{folder.name}: turned by {angle:.2f} degrees, found {len(walls)} walls "
-          f"-> {folder / 'walls_found.png'}")
+    doors = [g for g in gaps if g["kind"] == "door"]
+    print(f"{folder.name}: turned by {angle:.2f} degrees, {len(walls)} walls, "
+          f"{len(rooms)} rooms, {len(doors)} doors -> {folder / 'rooms.png'}")
 
 
 if __name__ == "__main__":

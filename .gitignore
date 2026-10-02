@@ -10,3 +10,6 @@ preview/
 
 __pycache__/
 *.pyc
+
+# Local Claude Code settings
+.claude/

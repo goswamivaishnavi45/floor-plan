@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(.venv/Scripts/python -m src.layout outputs/c00a170fe1)",
-      "Bash(.venv/Scripts/python -c ' *)"
-    ]
-  }
-}

@@ -52,21 +52,30 @@ def valid_mask(depth, confidence):
     return mask
 
 
-def voxel_downsample(points, colors, voxel):
-    """Keep one point (the mean) per voxel."""
+def voxel_downsample(points, colors, weights, voxel):
+    """Keep one point per voxel: the weighted mean of the points inside it.
+
+    `weights` is how many raw measurements each input point stands for (1 for
+    a raw point, more for a point that is already an average). Carrying the
+    weights makes chunked merging give exactly the same result as merging
+    everything at once.
+    """
     keys = np.floor(points / voxel).astype(np.int64)
-    _, inverse, counts = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
+    _, inverse = np.unique(keys, axis=0, return_inverse=True)
     inverse = inverse.ravel()
-    mean_points = np.zeros((len(counts), 3))
-    mean_colors = np.zeros((len(counts), 3))
-    np.add.at(mean_points, inverse, points)
-    np.add.at(mean_colors, inverse, colors)
-    return mean_points / counts[:, None], mean_colors / counts[:, None]
+    n = inverse.max() + 1
+    total_weight = np.bincount(inverse, weights=weights, minlength=n)
+    mean_points = np.zeros((n, 3))
+    mean_colors = np.zeros((n, 3))
+    np.add.at(mean_points, inverse, points * weights[:, None])
+    np.add.at(mean_colors, inverse, colors * weights[:, None])
+    return (mean_points / total_weight[:, None], mean_colors / total_weight[:, None],
+            total_weight)
 
 
 def fuse(capture, stride):
     frames = [i for i in range(0, capture.num_frames, stride) if capture.has_depth[i]]
-    points, colors = [], []
+    points, colors, weights = [], [], []
     for n, (i, bgr) in enumerate(capture.rgb_frames(frames)):
         depth = capture.depth(i)
         mask = valid_mask(depth, capture.confidence(i))
@@ -74,13 +83,17 @@ def fuse(capture, stride):
         pose = capture.poses[i]
         points.append(cam @ pose[:3, :3].T + pose[:3, 3])
         colors.append(bgr[mask][:, ::-1].astype(np.float64))   # BGR -> RGB
+        weights.append(np.ones(len(cam)))
         # Downsample in chunks so memory stays bounded on long captures.
         if len(points) >= 50:
-            p, c = voxel_downsample(np.concatenate(points), np.concatenate(colors), VOXEL)
-            points, colors = [p], [c]
+            merged = voxel_downsample(np.concatenate(points), np.concatenate(colors),
+                                      np.concatenate(weights), VOXEL)
+            points, colors, weights = [merged[0]], [merged[1]], [merged[2]]
         if n % 100 == 0:
             print(f"  frame {i}/{capture.num_frames}")
-    return voxel_downsample(np.concatenate(points), np.concatenate(colors), VOXEL)
+    points, colors, _ = voxel_downsample(np.concatenate(points), np.concatenate(colors),
+                                         np.concatenate(weights), VOXEL)
+    return points, colors
 
 
 def horizontal_levels(points, bin_size=0.02):

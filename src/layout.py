@@ -304,14 +304,17 @@ class Grid:
 def find_rooms(points, floor_y, walls):
     """Paint-bucket rooms: floor that is enclosed by walls and closed gaps.
 
-    1. Mark every grid square where floor was seen; fill small holes.
+    1. Mark every grid square where anything was seen, at any height; fill
+       small holes. LiDAR cannot see through walls, so any point is inside
+       the home. Using only floor points left rooms patchy: the floor is
+       hidden under furniture and the phone rarely looked straight down.
     2. Draw walls (stretched at the ends) and all gaps as barriers.
-    3. Every connected patch of floor not crossed by a barrier is a room.
+    3. Every connected patch not crossed by a barrier is a room.
     Returns (grid, label image, rooms, gaps).
     """
     grid = Grid(points)
-    on_floor = np.abs(points[:, 1] - floor_y) <= FLOOR_TOLERANCE
-    cols, rows = grid.cells(points[on_floor][:, [0, 2]])
+    above_floor = points[:, 1] >= floor_y - FLOOR_TOLERANCE
+    cols, rows = grid.cells(points[above_floor][:, [0, 2]])
     floor = np.zeros(grid.shape, np.uint8)
     floor[rows, cols] = 1
     size = int(round(FLOOR_FILL / GRID)) | 1

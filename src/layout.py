@@ -56,6 +56,13 @@ CLOSE_AS_WALL = 0.60     # gaps shorter than this are holes in a wall: close the
 DOOR_MIN, DOOR_MAX = 0.60, 1.20   # gaps this wide are doorways: close and record them
 MIN_ROOM_AREA = 1.5      # m^2; smaller painted areas are corners or clutter
 
+# Height settings (part 4d)
+MIN_CEILING_ABOVE_FLOOR = 1.8   # no room has a lower ceiling; below this is furniture
+SHELF = 0.02             # 2 cm height shelves when searching for the ceiling
+SHELF_REACH = 0.02       # precise level = median of points within +-2 cm of the best shelf
+MIN_CEILING_SEEN = 0.25  # report a ceiling only if it was seen over 25% of the room
+MIN_SECOND_LEVEL_SEEN = 0.10    # a second ceiling level must cover 10% of the room
+
 
 def rotate_about_vertical(points, angle_deg):
     """Turn points about the y (up) axis by angle_deg. Heights are unchanged."""
@@ -375,6 +382,68 @@ def find_rooms(points, floor_y, walls):
     return grid, room_labels, rooms, gaps
 
 
+def measure_heights(points, floor_y, grid, room_labels, rooms):
+    """Floor height, ceiling height and ceiling-to-floor distance per room.
+
+    Floor: the floor is always the lowest big surface and Stage 8 already
+    found it roughly, so take the room's points within +-8 cm of it and use
+    their median. Ceiling: its height differs between rooms (lowered ceilings)
+    and other things sit up high (wardrobe tops, lamps), so search: count the
+    room's points at least 1.8 m above its floor in 2 cm shelves, take the
+    busiest shelf, and use the median of the points within +-2 cm of it.
+    The ceiling is only reported when it was seen over 25% of the room.
+    """
+    cols, rows = grid.cells(points[:, [0, 2]])
+    inside = (rows >= 0) & (rows < grid.shape[0]) & (cols >= 0) & (cols < grid.shape[1])
+    label = np.zeros(len(points), int)
+    label[inside] = room_labels[rows[inside], cols[inside]]
+
+    def seen_fraction(mask, room_cells):
+        """Share of the room's grid squares that hold at least one masked point."""
+        seen = np.unique(rows[mask] * grid.shape[1] + cols[mask])
+        return len(seen) / room_cells
+
+    for room in rooms:
+        in_room = label == room["id"]
+        room_cells = int((room_labels == room["id"]).sum())
+        y = points[:, 1]
+
+        near_floor = in_room & (np.abs(y - floor_y) <= FLOOR_TOLERANCE)
+        room_floor = float(np.median(y[near_floor])) if near_floor.sum() >= 100 else float(floor_y)
+        room["floor_y"] = round(room_floor, 4)
+        room["floor_points"] = int(near_floor.sum())
+        room["ceiling_y"] = room["ceiling_height"] = None
+        room["ceiling_seen"] = 0.0
+
+        high = in_room & (y >= room_floor + MIN_CEILING_ABOVE_FLOOR)
+        if high.sum() < 100:
+            room["ceiling_note"] = "ceiling not seen"
+            continue
+        edges = np.arange(y[high].min(), y[high].max() + SHELF, SHELF)
+        counts, edges = np.histogram(y[high], bins=edges)
+        order = np.argsort(counts)[::-1]
+
+        levels = []
+        for k in order[:10]:
+            centre = (edges[k] + edges[k + 1]) / 2
+            if any(abs(centre - level) < 0.10 for level, _ in levels):
+                continue   # part of a level we already have
+            on_shelf = high & (np.abs(y - centre) <= SHELF / 2 + SHELF_REACH)
+            levels.append((float(np.median(y[on_shelf])), seen_fraction(on_shelf, room_cells)))
+
+        main_level, main_seen = levels[0]
+        room["ceiling_seen"] = round(main_seen, 2)
+        if main_seen < MIN_CEILING_SEEN:
+            room["ceiling_note"] = f"ceiling seen over only {main_seen:.0%} of the room; not reported"
+            continue
+        room["ceiling_y"] = round(main_level, 4)
+        room["ceiling_height"] = round(main_level - room_floor, 4)
+        others = [(lv, s) for lv, s in levels[1:] if s >= MIN_SECOND_LEVEL_SEEN]
+        if others:
+            lv, s = others[0]
+            room["other_ceiling_level"] = {"height": round(lv - room_floor, 4), "seen": round(s, 2)}
+
+
 def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
     """Each room in its own colour, walls black, wall-gaps grey, doors red."""
     scale = 2   # draw at 2.5 cm per pixel so labels are readable
@@ -398,6 +467,9 @@ def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
         x, y = px(*room["centre"])
         cv2.putText(image, f"R{room['id']}", (x - 14, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
         cv2.putText(image, f"{room['area_m2_rough']:.1f} m2", (x - 24, y + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+        height = room.get("ceiling_height")
+        cv2.putText(image, f"h {height:.2f} m" if height else "h ?", (x - 24, y + 34),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
     length = int(round(1.0 / GRID)) * scale
     h = image.shape[0]
@@ -425,6 +497,7 @@ def main():
     draw_walls(straight, floor_y, ceiling_y, walls, folder / "walls_found.png")
 
     grid, room_labels, rooms, gaps = find_rooms(straight, floor_y, walls)
+    measure_heights(straight, floor_y, grid, room_labels, rooms)
     draw_rooms(grid, room_labels, rooms, walls, gaps, folder / "rooms.png")
 
     layout_path = folder / "layout.json"

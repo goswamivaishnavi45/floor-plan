@@ -70,7 +70,7 @@ def fuse(capture, stride):
     for n, (i, bgr) in enumerate(capture.rgb_frames(frames)):
         depth = capture.depth(i)
         mask = valid_mask(depth, capture.confidence(i))
-        cam = backproject(depth, capture.K_depth, mask)
+        cam = backproject(depth, capture.K_depth[i], mask)
         pose = capture.poses[i]
         points.append(cam @ pose[:3, :3].T + pose[:3, 3])
         colors.append(bgr[mask][:, ::-1].astype(np.float64))   # BGR -> RGB

@@ -1,8 +1,8 @@
 """Reading a Stray Scanner LiDAR capture from disk.
 
 A capture folder contains:
-  camera_matrix.csv   3x3 intrinsics for the 1920x1440 RGB image
-  odometry.csv        one camera pose per frame (position + quaternion)
+  camera_matrix.csv   3x3 intrinsics for the 1920x1440 RGB image (fallback)
+  odometry.csv        per frame: camera pose (position + quaternion) and intrinsics
   depth/NNNNNN.png    256x192 uint16 depth in millimetres
   confidence/NNNNNN.png  256x192 uint8, 0 = low, 1 = medium, 2 = high
   rgb.mp4             colour video, one video frame per odometry row
@@ -40,7 +40,7 @@ class Capture:
     root: Path
     timestamps: np.ndarray   # (N,) seconds
     poses: np.ndarray        # (N, 4, 4) camera-to-world transforms
-    K_depth: np.ndarray      # (3, 3) intrinsics scaled to the depth image
+    K_depth: np.ndarray      # (N, 3, 3) per-frame intrinsics scaled to the depth image
     has_depth: np.ndarray    # (N,) bool, False where the depth PNG is missing
 
     @property
@@ -73,12 +73,21 @@ class Capture:
 
 def load_capture(root):
     root = Path(root)
-    K = np.loadtxt(root / "camera_matrix.csv", delimiter=",")
-    scale = DEPTH_WIDTH / RGB_WIDTH
-    K_depth = K.copy()
-    K_depth[:2] *= scale
+    odometry = np.genfromtxt(root / "odometry.csv", delimiter=",", skip_header=1, usecols=range(13))
 
-    odometry = np.genfromtxt(root / "odometry.csv", delimiter=",", skip_header=1, usecols=range(9))
+    # Intrinsics change from frame to frame because autofocus moves the lens:
+    # fx varies by up to 1.2% within one capture (1581 to 1615 px on
+    # c7d28f72c6), worth ~2 cm at the image edge 3 m away. So we use the
+    # per-frame fx, fy, cx, cy from odometry.csv rather than the single
+    # camera_matrix.csv, falling back to it if a row has no intrinsics.
+    K = np.loadtxt(root / "camera_matrix.csv", delimiter=",")
+    K_frames = np.tile(K, (len(odometry), 1, 1))
+    per_frame = ~np.isnan(odometry[:, 9:13]).any(axis=1)
+    fx, fy, cx, cy = odometry[per_frame, 9:13].T
+    K_frames[per_frame, 0, 0], K_frames[per_frame, 1, 1] = fx, fy
+    K_frames[per_frame, 0, 2], K_frames[per_frame, 1, 2] = cx, cy
+    K_depth = K_frames.copy()
+    K_depth[:, :2] *= DEPTH_WIDTH / RGB_WIDTH
     poses = np.tile(np.eye(4), (len(odometry), 1, 1))
     for n, row in enumerate(odometry):
         poses[n, :3, :3] = quaternion_to_matrix(row[5:9])

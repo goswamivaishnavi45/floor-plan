@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goswamivaishnavi45/floor-plan/schema/result.schema.json",
+  "title": "Floor plan result",
+  "description": "Output of `python run.py <capture>`. All lengths in metres, areas in square metres. Every measurement carries a 95% range (pm95): the true value is expected inside value +- pm95 about 19 times in 20. Plan coordinates (x, z) are horizontal, in the capture's own frame turned so walls run along the axes.",
+  "type": "object",
+  "required": ["schema_version", "capture", "units", "rooms", "openings", "adjacency", "property",
+               "damage", "concealed_damage_flags", "scope", "warnings"],
+  "additionalProperties": false,
+  "$defs": {
+    "measure": {
+      "type": "object",
+      "description": "A measured value with its 95% range. value is null when the quantity could not be measured; note says why.",
+      "required": ["value", "pm95"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": ["number", "null"]},
+        "pm95": {"type": ["number", "null"], "minimum": 0},
+        "note": {"type": "string"}
+      }
+    },
+    "point": {
+      "type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2,
+      "description": "[x, z] in metres, plan coordinates"
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "capture": {
+      "type": "object",
+      "required": ["id", "tier", "processing_seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "tier": {"enum": ["lidar", "video", "photo"]},
+        "source": {"type": "string", "description": "capture app or format, e.g. Stray Scanner"},
+        "frames": {"type": "integer", "minimum": 0},
+        "frames_used": {"type": "integer", "minimum": 0},
+        "processing_seconds": {"type": "number", "minimum": 0},
+        "plan_rotation_deg": {"type": "number", "description": "turn applied about the vertical axis to straighten the walls"},
+        "drift_sigma_m": {"type": "number", "minimum": 0}
+      }
+    },
+    "units": {"const": "metres"},
+    "rooms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "outline", "shape", "width", "length", "floor_area", "ceiling_height", "walls"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^R[0-9]+$"},
+          "name": {"type": "string"},
+          "outline": {"type": "array", "items": {"$ref": "#/$defs/point"}, "minItems": 3,
+                      "description": "corners in order around the room"},
+          "shape": {"enum": ["rectangular", "not rectangular"]},
+          "width": {"$ref": "#/$defs/measure", "description": "extent along x"},
+          "length": {"$ref": "#/$defs/measure", "description": "extent along z"},
+          "floor_area": {"$ref": "#/$defs/measure"},
+          "ceiling_height": {"$ref": "#/$defs/measure"},
+          "walls": {
+            "type": "array",
+            "description": "one entry per side of the outline, in outline order",
+            "items": {
+              "type": "object",
+              "required": ["id", "start", "end", "length", "detected"],
+              "additionalProperties": false,
+              "properties": {
+                "id": {"type": "string", "pattern": "^R[0-9]+-W[0-9]+$"},
+                "start": {"$ref": "#/$defs/point"},
+                "end": {"$ref": "#/$defs/point"},
+                "length": {"$ref": "#/$defs/measure"},
+                "detected": {"type": "boolean", "description": "false when no wall was found and the side comes from the room's painted edge"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "openings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "start", "end", "width", "rooms"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^O[0-9]+$"},
+          "type": {"enum": ["door", "opening", "window"]},
+          "start": {"$ref": "#/$defs/point"},
+          "end": {"$ref": "#/$defs/point"},
+          "width": {"$ref": "#/$defs/measure"},
+          "rooms": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "adjacency": {
+      "type": "array",
+      "description": "pairs of rooms connected through an opening",
+      "items": {
+        "type": "object",
+        "required": ["rooms", "via"],
+        "additionalProperties": false,
+        "properties": {
+          "rooms": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+          "via": {"type": "string"}
+        }
+      }
+    },
+    "property": {
+      "type": "object",
+      "required": ["room_count", "total_floor_area"],
+      "additionalProperties": false,
+      "properties": {
+        "room_count": {"type": "integer", "minimum": 0},
+        "total_floor_area": {"$ref": "#/$defs/measure"}
+      }
+    },
+    "damage": {
+      "type": "array",
+      "description": "per-surface damage regions (filled in a later version)",
+      "items": {"type": "object"}
+    },
+    "concealed_damage_flags": {"type": "array", "items": {"type": "object"}},
+    "scope": {"type": "array", "items": {"type": "object"}},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  }
+}

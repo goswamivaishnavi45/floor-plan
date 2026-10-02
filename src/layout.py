@@ -517,6 +517,7 @@ def measure_rooms(grid, room_labels, rooms, walls):
 
         room["shape"] = "rectangular" if rectangular else "not rectangular (area from painted floor)"
         room["sides"] = {s: v["wall"] for s, v in sides.items()}
+        room["side_positions"] = {s: round(float(v["position"]), 4) for s, v in sides.items()}
         room["missing_sides"] = [s for s, v in sides.items() if v["wall"] is None]
         room["width"] = {"value": round(width, 3), "pm95": round(2 * w_sigma, 3)}
         room["length"] = {"value": round(length, 3), "pm95": round(2 * l_sigma, 3)}
@@ -569,13 +570,9 @@ def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
     cv2.imwrite(str(path), image)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("folder", help="output folder containing pointcloud.ply")
-    args = parser.parse_args()
-
-    folder = Path(args.folder)
-    points, colors = read_ply(folder / "pointcloud.ply")
+def build_layout(points, colors, folder):
+    """Run parts 4a-4e on a fused cloud. Writes the debug pictures and
+    layout.json to `folder` and returns the layout plus the room grid."""
     floor_y, ceiling_y = horizontal_levels(points)
 
     angle, *_ = find_rotation(points, floor_y, ceiling_y)
@@ -590,17 +587,23 @@ def main():
     drift = measure_rooms(grid, room_labels, rooms, walls)
     draw_rooms(grid, room_labels, rooms, walls, gaps, folder / "rooms.png")
 
-    layout_path = folder / "layout.json"
-    layout = json.loads(layout_path.read_text()) if layout_path.exists() else {}
-    layout["rotation_deg"] = round(angle, 2)
-    layout["drift_sigma_m"] = round(drift, 4)
-    layout["walls"] = walls
-    layout["rooms"] = rooms
-    layout["gaps"] = gaps
-    layout_path.write_text(json.dumps(layout, indent=2))
-    doors = [g for g in gaps if g["kind"] == "door"]
-    print(f"{folder.name}: turned by {angle:.2f} degrees, {len(walls)} walls, "
-          f"{len(rooms)} rooms, {len(doors)} doors -> {folder / 'rooms.png'}")
+    layout = {"rotation_deg": round(angle, 2), "drift_sigma_m": round(drift, 4),
+              "walls": walls, "rooms": rooms, "gaps": gaps}
+    (folder / "layout.json").write_text(json.dumps(layout, indent=2))
+    return layout, grid, room_labels
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("folder", help="output folder containing pointcloud.ply")
+    args = parser.parse_args()
+
+    folder = Path(args.folder)
+    points, colors = read_ply(folder / "pointcloud.ply")
+    layout, _, _ = build_layout(points, colors, folder)
+    doors = [g for g in layout["gaps"] if g["kind"] == "door"]
+    print(f"{folder.name}: turned by {layout['rotation_deg']:.2f} degrees, {len(layout['walls'])} walls, "
+          f"{len(layout['rooms'])} rooms, {len(doors)} doors -> {folder / 'rooms.png'}")
 
 
 if __name__ == "__main__":

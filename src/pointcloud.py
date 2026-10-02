@@ -199,22 +199,39 @@ def save_ply(path, points, colors):
         f.write(record.tobytes())
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("capture", help="path to a Stray Scanner capture folder")
-    parser.add_argument("--stride", type=int, default=5, help="use every Nth frame (default 5)")
-    parser.add_argument("--out", default="outputs", help="output root folder")
-    args = parser.parse_args()
+TARGET_FRAMES = 1200   # about one frame every 0.1-0.2 s of walking; more adds time, not detail
 
-    capture = load_capture(args.capture)
-    out_dir = Path(args.out) / capture.root.name
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"{capture.root.name}: {capture.num_frames} frames, using every {args.stride}th")
 
-    points, colors = fuse(capture, args.stride)
+def auto_stride(num_frames):
+    """Every 5th frame for short captures, sparser for long ones so the
+    number of fused frames stays near TARGET_FRAMES."""
+    return max(5, round(num_frames / TARGET_FRAMES))
+
+
+def build_pointcloud(capture_root, out_dir, stride=None):
+    """Fuse a capture and write pointcloud.ply, topdown.png and walls.png.
+    Returns (points, colors, capture, stride)."""
+    capture = load_capture(capture_root)
+    stride = stride or auto_stride(capture.num_frames)
+    points, colors = fuse(capture, stride)
     floor_y, ceiling_y = horizontal_levels(points)
     save_ply(out_dir / "pointcloud.ply", points, colors)
     save_topdown_views(points, colors, out_dir, floor_y, ceiling_y)
+    return points, colors, capture, stride
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("capture", help="path to a Stray Scanner capture folder")
+    parser.add_argument("--stride", type=int, default=None, help="use every Nth frame (default: automatic)")
+    parser.add_argument("--out", default="outputs", help="output root folder")
+    args = parser.parse_args()
+
+    out_dir = Path(args.out) / Path(args.capture).name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    points, colors, capture, stride = build_pointcloud(args.capture, out_dir, args.stride)
+    print(f"{capture.root.name}: {capture.num_frames} frames, used every {stride}th")
+    floor_y, ceiling_y = horizontal_levels(points)
 
     extent = points.max(axis=0) - points.min(axis=0)
     print(f"points after 2 cm voxel filter: {len(points):,}")

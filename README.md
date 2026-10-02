@@ -8,6 +8,7 @@ Turns a phone capture of a home (photos, video, or LiDAR) into a dimensioned flo
 python -m venv .venv
 .venv\Scripts\activate          # Windows; on macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
+python scripts/fetch_models.py   # downloads the depth model weights (~95 MB) into models/
 ```
 
 ## Run on a capture (one command)

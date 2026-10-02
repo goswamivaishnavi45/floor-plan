@@ -13,3 +13,6 @@ __pycache__/
 
 # Local Claude Code settings
 .claude/
+
+# Downloaded model weights (scripts/fetch_models.py)
+models/

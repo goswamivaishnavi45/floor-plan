@@ -16,19 +16,9 @@ from pathlib import Path
 
 import numpy as np
 
+from src.pointcloud import read_ply
+
 MAX_POINTS = 1_500_000   # keeps the page under ~30 MB and smooth on a laptop
-
-
-def read_ply(path):
-    raw = Path(path).read_bytes()
-    start = raw.index(b"end_header\n") + len(b"end_header\n")
-    record = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
-                       ("r", "u1"), ("g", "u1"), ("b", "u1")])
-    data = np.frombuffer(raw[start:], dtype=record)
-    points = np.stack([data["x"], data["y"], data["z"]], axis=1)
-    colors = np.stack([data["r"], data["g"], data["b"]], axis=1)
-    return points, colors
-
 
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>{title}</title>

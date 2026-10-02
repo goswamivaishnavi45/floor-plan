@@ -29,3 +29,11 @@ python -m src.viewer outputs/c00a170fe1/pointcloud.ply
 ```
 
 Writes `outputs/c00a170fe1/viewer.html`. Open it in a browser: drag to rotate, scroll to zoom, and use the slider to cut away the ceiling.
+
+## Room layout
+
+```
+python -m src.layout outputs/c00a170fe1
+```
+
+Straightens the cloud so walls run along the x and z axes (`walls_straight.png`) and records the angle in `layout.json`.

@@ -136,7 +136,17 @@ def draw_scale_bar(image, cell):
     return image
 
 
-def save_topdown_views(points, colors, out_dir, floor_y, ceiling_y, cell=0.02):
+def wall_band(points, floor_y, ceiling_y):
+    """Mask of points well above the floor and below the ceiling.
+
+    Removing floor and ceiling leaves mostly vertical surfaces, which seen from
+    above collapse onto lines. Without a ceiling we stop at door height.
+    """
+    top = (ceiling_y - 0.3) if ceiling_y is not None else floor_y + 2.0
+    return (points[:, 1] > floor_y + 0.3) & (points[:, 1] < top)
+
+
+def save_topdown_views(points, colors, out_dir, floor_y, ceiling_y, cell=0.02, suffix=""):
     # Height-coloured top view: for each cell keep the colour of the highest point.
     def highest_colour(rows, cols, _, shape):
         image = np.full(shape + (3,), 255, np.uint8)
@@ -144,12 +154,11 @@ def save_topdown_views(points, colors, out_dir, floor_y, ceiling_y, cell=0.02):
         image[rows[order], cols[order]] = colors[order][:, ::-1].astype(np.uint8)
         return image
     image, _ = render_topdown(points, None, cell, highest_colour)
-    cv2.imwrite(str(out_dir / "topdown.png"), draw_scale_bar(image, cell))
+    cv2.imwrite(str(out_dir / f"topdown{suffix}.png"), draw_scale_bar(image, cell))
 
-    # Wall view: only points well above the floor and below the ceiling, so
-    # floor and ceiling are removed and vertical surfaces stand out as lines.
-    top = (ceiling_y - 0.3) if ceiling_y is not None else floor_y + 2.0
-    band = (points[:, 1] > floor_y + 0.3) & (points[:, 1] < top)
+    # Wall view: count wall-band points per cell; vertical surfaces stack
+    # many points into one cell and show up as dark lines.
+    band = wall_band(points, floor_y, ceiling_y)
 
     def density(rows, cols, _, shape):
         counts = np.zeros(shape, np.float64)
@@ -158,7 +167,21 @@ def save_topdown_views(points, colors, out_dir, floor_y, ceiling_y, cell=0.02):
         return (255 * (1 - counts)).astype(np.uint8)
     walls, _ = render_topdown(points[band], None, cell, density)
     walls = cv2.cvtColor(walls, cv2.COLOR_GRAY2BGR)
-    cv2.imwrite(str(out_dir / "walls.png"), draw_scale_bar(walls, cell))
+    cv2.imwrite(str(out_dir / f"walls{suffix}.png"), draw_scale_bar(walls, cell))
+
+
+PLY_RECORD = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
+                       ("r", "u1"), ("g", "u1"), ("b", "u1")])
+
+
+def read_ply(path):
+    """Read a point cloud written by save_ply. Returns (points, colors)."""
+    raw = Path(path).read_bytes()
+    start = raw.index(b"end_header\n") + len(b"end_header\n")
+    data = np.frombuffer(raw[start:], dtype=PLY_RECORD)
+    points = np.stack([data["x"], data["y"], data["z"]], axis=1).astype(np.float64)
+    colors = np.stack([data["r"], data["g"], data["b"]], axis=1)
+    return points, colors
 
 
 def save_ply(path, points, colors):
@@ -168,8 +191,7 @@ def save_ply(path, points, colors):
         "property float x\nproperty float y\nproperty float z\n"
         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
     )
-    record = np.zeros(len(points), dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
-                                           ("r", "u1"), ("g", "u1"), ("b", "u1")])
+    record = np.zeros(len(points), dtype=PLY_RECORD)
     record["x"], record["y"], record["z"] = points.T
     record["r"], record["g"], record["b"] = np.clip(colors, 0, 255).astype(np.uint8).T
     with open(path, "wb") as f:

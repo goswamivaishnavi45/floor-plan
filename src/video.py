@@ -318,83 +318,20 @@ def piece_points(piece, frame_images):
     return points, colours
 
 
-# Part 6d: chain the pieces in time order into one cloud.
-VIDEO_FRAMES = 400           # frames handed to COLMAP (about 4 per second of a 1-2 min video)
+# Part 6d: measure rooms per video segment (pieces are not joined).
+# Joining pieces end to end was tried and failed (git history, commit
+# "chain pieces end to end"): walkers double back, so pieces overlap rather
+# than follow each other, and per-piece size errors of 5-40% do not fit.
+VIDEO_FRAMES = 300           # frames handed to COLMAP (~4-8 per second of a short video)
+MIN_SIDES_FOUND = 3          # a room is reported only if walls were found on 3 of its 4 sides
 
 
-def piece_camera_track(piece, frame_index):
-    """Position (metres, levelled frame) and heading (yaw, degrees) of one
-    of the piece's cameras. Heading is the horizontal direction it looks."""
-    cam = piece["cameras"][frame_index]
-    position = piece["to_level"] @ (piece["metres_per_unit"] * cam["center"])
-    forward = piece["to_level"] @ cam["R"][:, 2]
-    return position, float(np.degrees(np.arctan2(forward[0], forward[2])))
-
-
-def chain_pieces(pieces, frame_images, log=print):
-    """Join the pieces into one cloud, in time order (part 6d).
-
-    A gap between pieces is a moment where COLMAP lost track, usually a
-    second or two of plain wall, in which the person barely moved. So each
-    piece is placed to start where the previous one ended:
-    - its floor is set to height 0 (all floors in a home are level),
-    - its walls are straightened (part 4a), which leaves only a choice of
-      quarter turn; we take the quarter turn that keeps the camera's
-      heading continuous across the gap,
-    - it is shifted so its first camera sits on the previous last camera.
-    Pieces that could not be scaled or are implausibly tilted are skipped
-    (the chain continues from the last good piece). The gap assumption
-    costs a few tens of cm per gap; the error grows with the number of gaps.
-    Returns (points, colours, report).
-    """
-    from src.layout import find_rotation, rotate_about_vertical
-    from src.pointcloud import horizontal_levels
-
-    all_points, all_colours, report = [], [], []
-    previous = None   # (position, heading) of the last camera placed
-    for n, piece in enumerate(pieces):
-        frames = sorted(piece["cameras"])
-        row = {"piece": n, "frames": f"{frames[0]}-{frames[-1]}", "placed": len(frames)}
-        if piece.get("metres_per_unit") is None:
-            row["skipped"] = "too few COLMAP spots to give it a size"
-            report.append(row)
-            continue
-        points, colours = piece_points(piece, frame_images)
-        if points is None:
-            row["skipped"] = piece["rejected"]
-            report.append(row)
-            continue
-
-        floor_y, ceiling_y = horizontal_levels(points)
-        points[:, 1] -= floor_y
-        angle, *_ = find_rotation(points, 0.0, None if ceiling_y is None else ceiling_y - floor_y)
-        first_pos, first_heading = piece_camera_track(piece, frames[0])
-        last_pos, last_heading = piece_camera_track(piece, frames[-1])
-        if previous is not None:
-            # Of the four quarter turns, keep the one that best continues the heading.
-            turns = [angle + 90 * k for k in range(4)]
-            angle = min(turns, key=lambda a: abs((first_heading + a - previous[1] + 180) % 360 - 180))
-        points = rotate_about_vertical(points, angle)
-        ends = rotate_about_vertical(np.array([first_pos, last_pos]) - [0, floor_y, 0], angle)
-        target = np.zeros(3) if previous is None else previous[0]
-        shift = np.array([target[0] - ends[0][0], 0.0, target[2] - ends[0][2]])
-        points += shift
-        previous = (ends[1] + shift, last_heading + angle)
-        all_points.append(points)
-        all_colours.append(colours)
-        row.update({"metres_per_unit": round(piece["metres_per_unit"], 4), "points": len(points)})
-        report.append(row)
-        log(f"      piece {n}: frames {row['frames']}, {len(points):,} points")
-    if not all_points:
-        return None, None, report
-    return np.concatenate(all_points), np.concatenate(all_colours), report
-
-
-def build_video_cloud(video_path, workdir, rotate=None, log=print):
-    """Video file -> one coloured point cloud in metres (parts 6a-6d).
+def video_pieces(video_path, workdir, rotate=None, log=print):
+    """Video file -> COLMAP pieces with real size (parts 6a-6c).
     `rotate` is a cv2 rotation for videos stored sideways (Stray Scanner's
     rgb.mp4); videos from the iPhone Camera app carry an orientation flag
-    that OpenCV applies when reading, so they need none."""
+    that OpenCV applies when reading, so they need none.
+    Returns (pieces, frame images, info)."""
     from src.mono_depth import DepthModel
 
     frames = pick_frames(video_path, VIDEO_FRAMES)
@@ -410,7 +347,84 @@ def build_video_cloud(video_path, workdir, rotate=None, log=print):
     for piece in pieces:
         share = round(DEPTH_BUDGET * len(piece["cameras"]) / max(placed, 1))
         scale_piece(piece, images, model, count=max(3, min(DEPTH_FRAMES, share)))
-    points, colours, report = chain_pieces(pieces, images, log)
-    info = {"frames": len(frames), "frames_placed": placed, "pieces": len(pieces),
-            "pieces_used": sum(1 for r in report if "skipped" not in r), "per_piece": report}
-    return points, colours, info
+    return pieces, images, {"frames": len(frames), "frames_placed": placed, "pieces": len(pieces)}
+
+
+def measure_pieces(pieces, images, out_dir, capture_info, scale_sigma, log=print):
+    """Rooms measured inside each piece separately, merged into one result.
+
+    Each usable piece gets its own point cloud (floor at height 0) and runs
+    the LiDAR-tier layout (walls, rooms, sizes) on its own, with debug
+    pictures in out_dir/segment_N/. Only rooms with walls found on at least
+    MIN_SIDES_FOUND sides are kept: a half-seen room's size would be a guess.
+    Rooms keep the number of the segment they came from; they are not placed
+    relative to rooms of other segments, and the same real room can appear
+    in two segments.
+    """
+    from src.layout import build_layout
+    from src.pointcloud import horizontal_levels, save_ply
+    from src.result import build_result
+
+    merged = None
+    segments = []
+    for n, piece in enumerate(pieces):
+        frames = sorted(piece["cameras"])
+        row = {"segment": n + 1, "frames": f"{frames[0]}-{frames[-1]}", "placed": len(frames)}
+        segments.append(row)
+        if piece.get("metres_per_unit") is None:
+            row["skipped"] = "too few COLMAP spots to give it a size"
+            continue
+        points, colours = piece_points(piece, images)
+        if points is None:
+            row["skipped"] = piece["rejected"]
+            continue
+        floor_y, _ = horizontal_levels(points)
+        points[:, 1] -= floor_y
+        segment_dir = Path(out_dir) / f"segment_{n + 1}"
+        segment_dir.mkdir(parents=True, exist_ok=True)
+        save_ply(segment_dir / "pointcloud.ply", points, colours)
+        layout, grid, room_labels = build_layout(points, colours, segment_dir)
+        complete = {room["id"] for room in layout["rooms"]
+                    if 4 - len(room["missing_sides"]) >= MIN_SIDES_FOUND}
+        layout["rooms"] = [room for room in layout["rooms"] if room["id"] in complete]
+        part = build_result(layout, grid, room_labels, dict(capture_info), scale_sigma=scale_sigma)
+        row["rooms"] = len(part["rooms"])
+        log(f"      segment {n + 1}: frames {row['frames']}, {row['rooms']} complete rooms")
+
+        if merged is None:
+            merged = part
+            merged["rooms"], merged["openings"], merged["adjacency"] = [], [], []
+        # Renumber rooms and openings so ids are unique across segments.
+        rename = {}
+        for room in part["rooms"]:
+            new_id = f"R{len(merged['rooms']) + 1}"
+            rename[room["id"]] = new_id
+            room["id"], room["name"], room["segment"] = new_id, f"Room {new_id[1:]} (segment {n + 1})", n + 1
+            for k, wall in enumerate(room["walls"], start=1):
+                wall["id"] = f"{new_id}-W{k}"
+            merged["rooms"].append(room)
+        for opening in part["openings"]:
+            rooms = [rename[r] for r in opening["rooms"] if r in rename]
+            if not rooms:
+                continue
+            opening["id"], opening["rooms"] = f"O{len(merged['openings']) + 1}", rooms
+            merged["openings"].append(opening)
+            if len(rooms) == 2:
+                merged["adjacency"].append({"rooms": rooms, "via": opening["id"]})
+
+    if merged is None:
+        return None, segments
+    areas = [(r["floor_area"]["value"], r["floor_area"]["pm95"]) for r in merged["rooms"]]
+    merged["property"] = {"room_count": len(merged["rooms"]), "total_floor_area": {
+        "value": round(sum(a for a, _ in areas), 3),
+        "pm95": round(float(np.sqrt(sum(p ** 2 for _, p in areas))), 3)}}
+    # Room-specific warnings refer to per-segment ids; keep only the general ones.
+    general = [w for w in merged["warnings"] if not w.startswith("R")]
+    used = sum(1 for s in segments if "skipped" not in s)
+    merged["warnings"] = [
+        f"Video: rooms are measured separately in {used} of {len(segments)} video segments and are NOT "
+        "stitched into one plan; the same real room may be listed once per segment that saw it, so the "
+        "total floor area can double count.",
+        f"Only rooms with walls found on at least {MIN_SIDES_FOUND} of 4 sides are reported.",
+    ] + general
+    return merged, segments

@@ -51,6 +51,8 @@
         "properties": {
           "id": {"type": "string", "pattern": "^R[0-9]+$"},
           "name": {"type": "string"},
+          "segment": {"type": "integer", "minimum": 1,
+                      "description": "video tier only: the video segment this room was measured in; rooms of different segments are not placed relative to each other"},
           "outline": {"type": "array", "items": {"$ref": "#/$defs/point"}, "minItems": 3,
                       "description": "corners in order around the room"},
           "shape": {"enum": ["rectangular", "not rectangular"]},

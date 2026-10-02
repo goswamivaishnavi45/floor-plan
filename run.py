@@ -1,16 +1,19 @@
 """One command per capture.
 
-    python run.py <capture folder> [--out outputs]
+    python run.py <capture folder or video file> [--out outputs] [--rotate cw]
 
-Detects the input tier from what is in the folder, runs the pipeline and
-writes, in outputs/<capture name>/:
+Detects the input tier from what is given, runs the pipeline and writes, in
+outputs/<capture name>/:
     result.json   measurements in the published format (schema/result.schema.json)
     plan.png      the floor plan
 plus debug pictures and the point cloud for inspection.
 
 Tiers:
     lidar   Stray Scanner export: depth/, confidence/, odometry.csv, rgb.mp4
-    video   a folder with one video file (.mp4 / .mov)            [not yet supported]
+    video   a video file (.mp4 / .mov), or a folder holding one. Rooms are
+            measured per video segment (see src/video.py). Use --rotate
+            cw|ccw|180 for videos stored sideways, e.g. Stray Scanner's
+            rgb.mp4; iPhone Camera videos are upright already.
     photo   a folder of sub-folders, one per room, holding images [not yet supported]
 """
 
@@ -20,16 +23,26 @@ import sys
 import time
 from pathlib import Path
 
+import cv2
+
 from src.layout import build_layout
 from src.plan import draw_plan
 from src.pointcloud import build_pointcloud
 from src.result import build_result, validate
+from src.video import measure_pieces, video_pieces
 
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".heic"}
 VIDEO_TYPES = {".mp4", ".mov", ".m4v"}
 
 
+VIDEO_SCALE_SIGMA = 0.10   # 1-sigma size uncertainty of the video tier: piece sizes were
+                           # -6% to +18% off on c00a170fe1 (scripts/check_pieces.py)
+ROTATIONS = {"cw": cv2.ROTATE_90_CLOCKWISE, "ccw": cv2.ROTATE_90_COUNTERCLOCKWISE, "180": cv2.ROTATE_180}
+
+
 def detect_tier(folder):
+    if folder.is_file():
+        return "video" if folder.suffix.lower() in VIDEO_TYPES else None
     if (folder / "depth").is_dir() and (folder / "odometry.csv").exists():
         return "lidar"
     files = [f for f in folder.iterdir() if f.is_file()]
@@ -56,22 +69,46 @@ def run_lidar(folder, out_dir, step):
     return result
 
 
+def run_video(video, capture_id, out_dir, step, rotate):
+    started = time.time()
+    step(1, "reconstructing video segments")
+    pieces, images, info = video_pieces(video, out_dir, rotate)
+    step(2, "finding walls and rooms in each segment")
+    capture = {"id": capture_id, "tier": "video", "source": video.name,
+               "frames": info["frames"], "frames_used": info["frames_placed"], "processing_seconds": 0.0}
+    result, segments = measure_pieces(pieces, images, out_dir, capture, VIDEO_SCALE_SIGMA)
+    (out_dir / "video_segments.json").write_text(json.dumps(segments, indent=2))
+    if result is None:
+        sys.exit("error: no part of the video could be reconstructed")
+    step(3, "writing results")
+    result["capture"]["processing_seconds"] = round(time.time() - started, 1)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("capture", help="capture folder")
+    parser.add_argument("capture", help="capture folder or video file")
     parser.add_argument("--out", default="outputs", help="output root folder (default: outputs)")
+    parser.add_argument("--rotate", choices=sorted(ROTATIONS), help="turn sideways video frames upright")
     args = parser.parse_args()
 
     folder = Path(args.capture)
-    if not folder.is_dir():
-        sys.exit(f"error: {folder} is not a folder")
+    if not folder.exists():
+        sys.exit(f"error: {folder} does not exist")
     tier = detect_tier(folder)
     if tier is None:
         sys.exit(f"error: could not tell what kind of capture {folder} is (see `python run.py --help`)")
-    if tier != "lidar":
-        sys.exit(f"error: {tier} captures are not supported yet")
+    if tier == "photo":
+        sys.exit("error: photo captures are not supported yet")
 
-    out_dir = Path(args.out) / folder.name
+    video = None
+    capture_id = folder.name
+    if tier == "video":
+        video = folder if folder.is_file() else next(
+            f for f in sorted(folder.iterdir()) if f.suffix.lower() in VIDEO_TYPES)
+        if folder.is_file():   # data/x/rgb.mp4 -> x_video
+            capture_id = f"{video.parent.name}_video"
+    out_dir = Path(args.out) / capture_id
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Detected: {tier} capture in {folder}")
     clock = {"t": time.time()}
@@ -83,7 +120,10 @@ def main():
         clock["t"] = now
         print(f"[{n}/3] {label} ...")
 
-    result = run_lidar(folder, out_dir, step)
+    if tier == "video":
+        result = run_video(video, capture_id, out_dir, step, ROTATIONS.get(args.rotate))
+    else:
+        result = run_lidar(folder, out_dir, step)
     print(f"      done in {time.time() - clock['t']:.0f} s")
     validate(result)
     (out_dir / "result.json").write_text(json.dumps(result, indent=2))

@@ -63,6 +63,20 @@ SHELF_REACH = 0.02       # precise level = median of points within +-2 cm of the
 MIN_CEILING_SEEN = 0.25  # report a ceiling only if it was seen over 25% of the room
 MIN_SECOND_LEVEL_SEEN = 0.10    # a second ceiling level must cover 10% of the room
 
+# Measurement and uncertainty settings (part 4e). The +- ranges are 95% ranges
+# (2 sigma). The sensor term is an assumption from published iPhone LiDAR room
+# tests (centimetre level per point, averaging over thousands of points leaves
+# a bias of a few mm per surface); it has not been checked against tape
+# measurements of these rooms yet.
+SURFACE_SIGMA = 0.005    # m, sensor bias left in one fitted wall/floor/ceiling surface
+MIN_DRIFT_SIGMA = 0.003  # m, drift floor even when room floors agree perfectly
+SIDE_SEARCH = 0.30       # a room side's wall must be within 30 cm of the painted edge
+MISSING_SIDE_SIGMA = 0.05   # m, when no wall was found for a side we use the painted
+                            # edge, which is only good to a few 5 cm squares
+LOW_COVER_SIGMA = 0.01   # m, extra for a ceiling seen over less than half the room
+RECTANGLE_FILL = 0.8     # painted area must fill 80% of the wall rectangle to call
+                         # the room rectangular; otherwise the area comes from the paint
+
 
 def rotate_about_vertical(points, angle_deg):
     """Turn points about the y (up) axis by angle_deg. Heights are unchanged."""
@@ -444,6 +458,78 @@ def measure_heights(points, floor_y, grid, room_labels, rooms):
             room["other_ceiling_level"] = {"height": round(lv - room_floor, 4), "seen": round(s, 2)}
 
 
+def wall_sigma(wall):
+    """One sigma of a wall's position: sensor bias plus the scatter of its
+    points around the centre line divided by sqrt(points), which is tiny for
+    thousands of points but large for a wall seen only briefly."""
+    scatter = PEAK_HALF_WIDTH / np.sqrt(3)   # points spread over +-3 cm
+    return float(np.hypot(SURFACE_SIGMA, scatter / np.sqrt(wall["points"])))
+
+
+def measure_rooms(grid, room_labels, rooms, walls):
+    """Width, length, area and ceiling height per room, each with a 95% range.
+
+    Sizes come from the walls, which are located to millimetres, not from the
+    painted squares. For each side of the room (left, right, front, back) we
+    take the room's wall closest to the painted edge. Drift is estimated from
+    how much the room floors disagree within this recording: floors in one
+    home are level, so their spread is a lower bound on the tracking drift.
+    """
+    floors = [r["floor_y"] for r in rooms if r["floor_points"] >= 100]
+    drift = max(MIN_DRIFT_SIGMA, (max(floors) - min(floors)) / 2) if len(floors) > 1 else MIN_DRIFT_SIGMA
+
+    for room in rooms:
+        rows, cols = np.nonzero(room_labels == room["id"])
+        x = grid.origin[0] + (cols + 0.5) * GRID
+        z = grid.origin[1] + (rows + 0.5) * GRID
+        edges = {"left": ("x", x.min()), "right": ("x", x.max()),
+                 "front": ("z", z.min()), "back": ("z", z.max())}
+
+        sides = {}
+        for side, (axis, edge) in edges.items():
+            candidates = [n for n in room.get("walls", []) if walls[n]["axis"] == axis
+                          and abs(walls[n]["position"] - edge) <= SIDE_SEARCH]
+            if candidates:
+                n = min(candidates, key=lambda n: abs(walls[n]["position"] - edge))
+                sides[side] = {"wall": n, "position": walls[n]["position"], "sigma": wall_sigma(walls[n])}
+            else:
+                sides[side] = {"wall": None, "position": float(edge), "sigma": MISSING_SIDE_SIGMA}
+
+        def span(a, b):
+            value = sides[b]["position"] - sides[a]["position"]
+            sigma = np.sqrt(sides[a]["sigma"] ** 2 + sides[b]["sigma"] ** 2 + drift ** 2)
+            return value, sigma
+
+        width, w_sigma = span("left", "right")      # along x
+        length, l_sigma = span("front", "back")     # along z
+        rect_area = width * length
+        area_sigma = np.hypot(length * w_sigma, width * l_sigma)
+        rectangular = room["area_m2_rough"] >= RECTANGLE_FILL * rect_area
+        if rectangular:
+            area = rect_area
+        else:
+            # L-shaped or merged room: the wall rectangle overstates the area,
+            # so use the painted squares, which are only good to about one
+            # square all the way round the outline.
+            area = room["area_m2_rough"]
+            perimeter = 2 * (width + length)
+            area_sigma = np.hypot(area_sigma, perimeter * GRID / 2)
+
+        room["shape"] = "rectangular" if rectangular else "not rectangular (area from painted floor)"
+        room["sides"] = {s: v["wall"] for s, v in sides.items()}
+        room["missing_sides"] = [s for s, v in sides.items() if v["wall"] is None]
+        room["width"] = {"value": round(width, 3), "pm95": round(2 * w_sigma, 3)}
+        room["length"] = {"value": round(length, 3), "pm95": round(2 * l_sigma, 3)}
+        room["floor_area"] = {"value": round(area, 2), "pm95": round(2 * area_sigma, 2)}
+        if room["ceiling_height"] is not None:
+            sigma = np.sqrt(2 * SURFACE_SIGMA ** 2 + drift ** 2
+                            + (LOW_COVER_SIGMA ** 2 if room["ceiling_seen"] < 0.5 else 0))
+            room["ceiling"] = {"value": round(room["ceiling_height"], 3), "pm95": round(2 * sigma, 3)}
+        else:
+            room["ceiling"] = {"value": None, "pm95": None, "note": room.get("ceiling_note")}
+    return drift
+
+
 def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
     """Each room in its own colour, walls black, wall-gaps grey, doors red."""
     scale = 2   # draw at 2.5 cm per pixel so labels are readable
@@ -465,12 +551,15 @@ def draw_rooms(grid, room_labels, rooms, walls, gaps, path):
         cv2.line(image, px(*g["a"]), px(*g["b"]), colour, width)
     for room in rooms:
         x, y = px(*room["centre"])
-        cv2.putText(image, f"R{room['id']}", (x - 14, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-        cv2.putText(image, f"{room['area_m2_rough']:.1f} m2", (x - 24, y + 18),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
-        height = room.get("ceiling_height")
-        cv2.putText(image, f"h {height:.2f} m" if height else "h ?", (x - 24, y + 34),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+        lines = [f"R{room['id']}"]
+        if "width" in room:
+            lines.append(f"{room['width']['value']:.2f} x {room['length']['value']:.2f} m")
+            lines.append(f"{room['floor_area']['value']:.1f} +-{room['floor_area']['pm95']:.1f} m2")
+            ceiling = room["ceiling"]
+            lines.append(f"h {ceiling['value']:.2f} +-{100 * ceiling['pm95']:.0f}cm" if ceiling["value"] else "h not seen")
+        for k, text in enumerate(lines):
+            cv2.putText(image, text, (x - 40, y + 16 * k), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6 if k == 0 else 0.42, (0, 0, 0), 2 if k == 0 else 1)
     length = int(round(1.0 / GRID)) * scale
     h = image.shape[0]
     cv2.line(image, (20, h - 20), (20 + length, h - 20), (0, 0, 0), 3)
@@ -498,11 +587,13 @@ def main():
 
     grid, room_labels, rooms, gaps = find_rooms(straight, floor_y, walls)
     measure_heights(straight, floor_y, grid, room_labels, rooms)
+    drift = measure_rooms(grid, room_labels, rooms, walls)
     draw_rooms(grid, room_labels, rooms, walls, gaps, folder / "rooms.png")
 
     layout_path = folder / "layout.json"
     layout = json.loads(layout_path.read_text()) if layout_path.exists() else {}
     layout["rotation_deg"] = round(angle, 2)
+    layout["drift_sigma_m"] = round(drift, 4)
     layout["walls"] = walls
     layout["rooms"] = rooms
     layout["gaps"] = gaps

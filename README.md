@@ -6,7 +6,7 @@ Turns a phone capture of a home (photos, video, or LiDAR) into a dimensioned flo
 
 ```
 python -m venv .venv
-.venv\Scriptsctivate          # Windows; on macOS/Linux: source .venv/bin/activate
+.venv\Scripts\activate          # Windows; on macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 

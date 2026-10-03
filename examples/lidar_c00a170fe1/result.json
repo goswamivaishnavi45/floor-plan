@@ -1,0 +1,803 @@
+{
+  "schema_version": "1.0",
+  "capture": {
+    "id": "c00a170fe1",
+    "tier": "lidar",
+    "source": "Stray Scanner",
+    "frames": 1715,
+    "frames_used": 343,
+    "processing_seconds": 333.1,
+    "drift_sigma_m": 0.0148,
+    "plan_rotation_deg": 22.8
+  },
+  "units": "metres",
+  "rooms": [
+    {
+      "id": "R1",
+      "name": "Room 1",
+      "outline": [
+        [
+          1.467,
+          -1.134
+        ],
+        [
+          1.467,
+          0.62
+        ],
+        [
+          0.47,
+          0.62
+        ],
+        [
+          0.47,
+          1.893
+        ],
+        [
+          2.378,
+          1.893
+        ],
+        [
+          2.378,
+          -1.134
+        ]
+      ],
+      "shape": "not rectangular",
+      "width": {
+        "value": 2.745,
+        "pm95": 0.033
+      },
+      "length": {
+        "value": 3.027,
+        "pm95": 0.033
+      },
+      "floor_area": {
+        "value": 4.027,
+        "pm95": 0.499
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "ceiling not seen"
+      },
+      "walls": [
+        {
+          "id": "R1-W1",
+          "start": [
+            1.467,
+            -1.134
+          ],
+          "end": [
+            1.467,
+            0.62
+          ],
+          "length": {
+            "value": 1.754,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R1-W2",
+          "start": [
+            1.467,
+            0.62
+          ],
+          "end": [
+            0.47,
+            0.62
+          ],
+          "length": {
+            "value": 0.997,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R1-W3",
+          "start": [
+            0.47,
+            0.62
+          ],
+          "end": [
+            0.47,
+            1.893
+          ],
+          "length": {
+            "value": 1.273,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R1-W4",
+          "start": [
+            0.47,
+            1.893
+          ],
+          "end": [
+            2.378,
+            1.893
+          ],
+          "length": {
+            "value": 1.908,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R1-W5",
+          "start": [
+            2.378,
+            1.893
+          ],
+          "end": [
+            2.378,
+            -1.134
+          ],
+          "length": {
+            "value": 3.027,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R1-W6",
+          "start": [
+            2.378,
+            -1.134
+          ],
+          "end": [
+            1.467,
+            -1.134
+          ],
+          "length": {
+            "value": 0.911,
+            "pm95": 0.014
+          },
+          "detected": true
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "name": "Room 2",
+      "outline": [
+        [
+          -1.23,
+          1.526
+        ],
+        [
+          -1.23,
+          3.296
+        ],
+        [
+          0.045,
+          3.296
+        ],
+        [
+          0.045,
+          1.945
+        ],
+        [
+          -0.28,
+          1.945
+        ],
+        [
+          -0.28,
+          1.526
+        ]
+      ],
+      "shape": "not rectangular",
+      "width": {
+        "value": 1.45,
+        "pm95": 0.144
+      },
+      "length": {
+        "value": 2.375,
+        "pm95": 0.105
+      },
+      "floor_area": {
+        "value": 2.121,
+        "pm95": 0.666
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "ceiling not seen"
+      },
+      "walls": [
+        {
+          "id": "R2-W1",
+          "start": [
+            -1.23,
+            1.526
+          ],
+          "end": [
+            -1.23,
+            3.296
+          ],
+          "length": {
+            "value": 1.77,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R2-W2",
+          "start": [
+            -1.23,
+            3.296
+          ],
+          "end": [
+            0.045,
+            3.296
+          ],
+          "length": {
+            "value": 1.275,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R2-W3",
+          "start": [
+            0.045,
+            3.296
+          ],
+          "end": [
+            0.045,
+            1.945
+          ],
+          "length": {
+            "value": 1.351,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R2-W4",
+          "start": [
+            0.045,
+            1.945
+          ],
+          "end": [
+            -0.28,
+            1.945
+          ],
+          "length": {
+            "value": 0.325,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R2-W5",
+          "start": [
+            -0.28,
+            1.945
+          ],
+          "end": [
+            -0.28,
+            1.526
+          ],
+          "length": {
+            "value": 0.419,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R2-W6",
+          "start": [
+            -0.28,
+            1.526
+          ],
+          "end": [
+            -1.23,
+            1.526
+          ],
+          "length": {
+            "value": 0.95,
+            "pm95": 0.141
+          },
+          "detected": false
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "name": "Room 3",
+      "outline": [
+        [
+          -1.355,
+          3.632
+        ],
+        [
+          -1.355,
+          2.103
+        ],
+        [
+          -4.255,
+          2.103
+        ],
+        [
+          -4.255,
+          2.47
+        ],
+        [
+          -5.53,
+          2.47
+        ],
+        [
+          -5.53,
+          3.632
+        ]
+      ],
+      "shape": "not rectangular",
+      "width": {
+        "value": 4.6,
+        "pm95": 0.144
+      },
+      "length": {
+        "value": 2.287,
+        "pm95": 0.105
+      },
+      "floor_area": {
+        "value": 5.916,
+        "pm95": 0.852
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "ceiling not seen"
+      },
+      "walls": [
+        {
+          "id": "R3-W1",
+          "start": [
+            -1.355,
+            3.632
+          ],
+          "end": [
+            -1.355,
+            2.103
+          ],
+          "length": {
+            "value": 1.529,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R3-W2",
+          "start": [
+            -1.355,
+            2.103
+          ],
+          "end": [
+            -4.255,
+            2.103
+          ],
+          "length": {
+            "value": 2.9,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R3-W3",
+          "start": [
+            -4.255,
+            2.103
+          ],
+          "end": [
+            -4.255,
+            2.47
+          ],
+          "length": {
+            "value": 0.367,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R3-W4",
+          "start": [
+            -4.255,
+            2.47
+          ],
+          "end": [
+            -5.53,
+            2.47
+          ],
+          "length": {
+            "value": 1.275,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R3-W5",
+          "start": [
+            -5.53,
+            2.47
+          ],
+          "end": [
+            -5.53,
+            3.632
+          ],
+          "length": {
+            "value": 1.162,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R3-W6",
+          "start": [
+            -5.53,
+            3.632
+          ],
+          "end": [
+            -1.355,
+            3.632
+          ],
+          "length": {
+            "value": 4.175,
+            "pm95": 0.014
+          },
+          "detected": true
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "name": "Room 4",
+      "outline": [
+        [
+          1.62,
+          1.893
+        ],
+        [
+          1.62,
+          2.714
+        ],
+        [
+          0.17,
+          2.714
+        ],
+        [
+          0.17,
+          3.564
+        ],
+        [
+          -0.2,
+          3.564
+        ],
+        [
+          -0.2,
+          4.903
+        ],
+        [
+          0.67,
+          4.903
+        ],
+        [
+          0.67,
+          4.903
+        ],
+        [
+          2.368,
+          4.903
+        ],
+        [
+          2.368,
+          1.893
+        ]
+      ],
+      "shape": "not rectangular",
+      "width": {
+        "value": 2.578,
+        "pm95": 0.033
+      },
+      "length": {
+        "value": 2.908,
+        "pm95": 0.105
+      },
+      "floor_area": {
+        "value": 5.921,
+        "pm95": 0.467
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "ceiling not seen"
+      },
+      "walls": [
+        {
+          "id": "R4-W1",
+          "start": [
+            1.62,
+            1.893
+          ],
+          "end": [
+            1.62,
+            2.714
+          ],
+          "length": {
+            "value": 0.821,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R4-W2",
+          "start": [
+            1.62,
+            2.714
+          ],
+          "end": [
+            0.17,
+            2.714
+          ],
+          "length": {
+            "value": 1.45,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R4-W3",
+          "start": [
+            0.17,
+            2.714
+          ],
+          "end": [
+            0.17,
+            3.564
+          ],
+          "length": {
+            "value": 0.85,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R4-W4",
+          "start": [
+            0.17,
+            3.564
+          ],
+          "end": [
+            -0.2,
+            3.564
+          ],
+          "length": {
+            "value": 0.37,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R4-W5",
+          "start": [
+            -0.2,
+            3.564
+          ],
+          "end": [
+            -0.2,
+            4.903
+          ],
+          "length": {
+            "value": 1.339,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R4-W6",
+          "start": [
+            -0.2,
+            4.903
+          ],
+          "end": [
+            0.67,
+            4.903
+          ],
+          "length": {
+            "value": 0.87,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R4-W7",
+          "start": [
+            0.67,
+            4.903
+          ],
+          "end": [
+            0.67,
+            4.903
+          ],
+          "length": {
+            "value": 0.0,
+            "pm95": 0.141
+          },
+          "detected": false
+        },
+        {
+          "id": "R4-W8",
+          "start": [
+            0.67,
+            4.903
+          ],
+          "end": [
+            2.368,
+            4.903
+          ],
+          "length": {
+            "value": 1.698,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R4-W9",
+          "start": [
+            2.368,
+            4.903
+          ],
+          "end": [
+            2.368,
+            1.893
+          ],
+          "length": {
+            "value": 3.01,
+            "pm95": 0.014
+          },
+          "detected": true
+        },
+        {
+          "id": "R4-W10",
+          "start": [
+            2.368,
+            1.893
+          ],
+          "end": [
+            1.62,
+            1.893
+          ],
+          "length": {
+            "value": 0.748,
+            "pm95": 0.014
+          },
+          "detected": true
+        }
+      ]
+    }
+  ],
+  "openings": [
+    {
+      "id": "O1",
+      "type": "door",
+      "start": [
+        -0.788,
+        -0.291
+      ],
+      "end": [
+        -0.788,
+        -1.134
+      ],
+      "width": {
+        "value": 0.843,
+        "pm95": 0.041
+      },
+      "rooms": []
+    },
+    {
+      "id": "O2",
+      "type": "door",
+      "start": [
+        2.378,
+        1.968
+      ],
+      "end": [
+        2.368,
+        2.718
+      ],
+      "width": {
+        "value": 0.75,
+        "pm95": 0.041
+      },
+      "rooms": [
+        "R4"
+      ]
+    },
+    {
+      "id": "O3",
+      "type": "door",
+      "start": [
+        -1.028,
+        3.632
+      ],
+      "end": [
+        -0.2,
+        3.632
+      ],
+      "width": {
+        "value": 0.828,
+        "pm95": 0.041
+      },
+      "rooms": []
+    }
+  ],
+  "adjacency": [],
+  "damage": [
+    {
+      "id": "D1",
+      "class": "mould",
+      "score": 0.3,
+      "room": "R4",
+      "surface": "R4-W9",
+      "surface_type": "wall",
+      "seen_in": "frame 1035",
+      "sightings": 1,
+      "width": {
+        "value": 0.747,
+        "pm95": 0.224
+      },
+      "height": {
+        "value": 1.507,
+        "pm95": 0.452
+      },
+      "area": {
+        "value": 1.125,
+        "pm95": 0.675
+      },
+      "height_above_floor": 1.03
+    }
+  ],
+  "concealed_damage_flags": [
+    {
+      "damage": "D1",
+      "rule": "C3",
+      "condition": "mould anywhere",
+      "flag": "hidden moisture likely behind or around the surface",
+      "surface": "R4-W9"
+    }
+  ],
+  "scope": [
+    {
+      "id": "S1",
+      "surface": "R4-W9",
+      "damage": "D1",
+      "action": "Mould treatment, stain-block and repaint",
+      "quantity": 2.84,
+      "unit": "m2"
+    }
+  ],
+  "warnings": [
+    "Ranges assume a 5 mm sensor bias per surface plus measured scatter and drift; they have not yet been checked against tape measurements.",
+    "R1 is not rectangular; its outline is traced from the seen floor and snapped to walls where found.",
+    "R1: ceiling not seen.",
+    "R2 is not rectangular; its outline is traced from the seen floor and snapped to walls where found.",
+    "R2: no wall found on side(s) left, right, front; those sides use the edge of the seen floor.",
+    "R2: ceiling not seen.",
+    "R3 is not rectangular; its outline is traced from the seen floor and snapped to walls where found.",
+    "R3: no wall found on side(s) left, right, front; those sides use the edge of the seen floor.",
+    "R3: ceiling not seen.",
+    "R4 is not rectangular; its outline is traced from the seen floor and snapped to walls where found.",
+    "R4: no wall found on side(s) front; those sides use the edge of the seen floor.",
+    "R4: ceiling not seen.",
+    "Drift: frames fused in 20 s chunks re-anchored to the floor where chunks overlap (src/drift.py).",
+    "Damage: 1 region(s) found by an open-vocabulary detector (OWLv2) on sharp frames; not validated on staged damage."
+  ],
+  "property": {
+    "room_count": 4,
+    "total_floor_area": {
+      "value": 17.984,
+      "pm95": 1.279
+    }
+  }
+}

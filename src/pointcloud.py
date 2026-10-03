@@ -229,12 +229,23 @@ def auto_stride(num_frames):
     return max(5, round(num_frames / TARGET_FRAMES))
 
 
-def build_pointcloud(capture_root, out_dir, stride=None):
+def build_pointcloud(capture_root, out_dir, stride=None, drift_correction=True):
     """Fuse a capture and write pointcloud.ply, topdown.png and walls.png.
+    With drift_correction, frames are fused in chunks and re-anchored to each
+    other (src/drift.py); the corrections go to out_dir/drift.json.
     Returns (points, colors, capture, stride)."""
+    import json
+
+    from src.drift import CHUNK_SECONDS, correct_drift
+
     capture = load_capture(capture_root)
     stride = stride or auto_stride(capture.num_frames)
-    points, colors = fuse(capture, stride)
+    if drift_correction:
+        chunks = fuse_chunks(capture, stride, CHUNK_SECONDS)
+        points, colors, report = correct_drift(chunks, log=lambda message: None)
+        (Path(out_dir) / "drift.json").write_text(json.dumps(report, indent=2))
+    else:
+        points, colors = fuse(capture, stride)
     floor_y, ceiling_y = horizontal_levels(points)
     save_ply(out_dir / "pointcloud.ply", points, colors)
     save_topdown_views(points, colors, out_dir, floor_y, ceiling_y)

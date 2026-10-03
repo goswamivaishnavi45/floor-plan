@@ -57,10 +57,10 @@ def detect_tier(folder):
     return None
 
 
-def run_lidar(folder, out_dir, step):
+def run_lidar(folder, out_dir, step, drift_correction=True):
     started = time.time()
-    step(1, "building 3D points")
-    points, colors, capture, stride = build_pointcloud(folder, out_dir)
+    step(1, "building 3D points" + ("" if drift_correction else " (drift correction off)"))
+    points, colors, capture, stride = build_pointcloud(folder, out_dir, drift_correction=drift_correction)
     step(2, "finding walls and rooms")
     layout, grid, room_labels = build_layout(points, colors, out_dir)
     step(3, "writing results")
@@ -69,6 +69,9 @@ def run_lidar(folder, out_dir, step):
             "processing_seconds": 0.0}
     result = build_result(layout, grid, room_labels, info)
     result["capture"]["processing_seconds"] = round(time.time() - started, 1)
+    result["warnings"].append("Drift: " + ("frames fused in 20 s chunks re-anchored to the floor where "
+                                           "chunks overlap (src/drift.py)" if drift_correction
+                                           else "poses used as recorded (--no-drift-correction)") + ".")
     return result
 
 
@@ -104,6 +107,8 @@ def main():
     parser.add_argument("capture", help="capture folder or video file")
     parser.add_argument("--out", default="outputs", help="output root folder (default: outputs)")
     parser.add_argument("--rotate", choices=sorted(ROTATIONS), help="turn sideways video frames upright")
+    parser.add_argument("--no-drift-correction", action="store_true",
+                        help="LiDAR tier: use the recorded poses as they are (for the on/off comparison)")
     args = parser.parse_args()
 
     folder = Path(args.capture)
@@ -136,7 +141,7 @@ def main():
     elif tier == "photo":
         result = run_photo(folder, out_dir, step)
     else:
-        result = run_lidar(folder, out_dir, step)
+        result = run_lidar(folder, out_dir, step, drift_correction=not args.no_drift_correction)
     print(f"      done in {time.time() - clock['t']:.0f} s")
     validate(result)
     (out_dir / "result.json").write_text(json.dumps(result, indent=2))

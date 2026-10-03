@@ -13,7 +13,7 @@ inside a chunk is negligible. Chunks are then added to the plan one by one:
    and other floor levels alone: anchoring every chunk to one floor height
    wrongly lifted half of c7d28f72c6 (a home with stairs) by 2.1 cm. A chunk
    with no overlapping floor keeps the previous chunk's shift.
-2. Wall anchor: seen from above, the chunk's wall points are slid (up to
+2. Wall anchor (off by default, see WALL_ANCHOR): seen from above, the chunk's wall points are slid (up to
    MAX_SHIFT) and turned (up to MAX_TURN) to where they overlap the walls
    already in the plan the most. Drift changes slowly, so the search starts
    from the previous chunk's correction. A chunk that does not overlap known
@@ -28,6 +28,9 @@ import numpy as np
 from src.pointcloud import VOXEL, horizontal_levels, voxel_downsample
 
 CHUNK_SECONDS = 20.0
+WALL_ANCHOR = False       # off by default: on c7d28f72c6 its small turns accumulated over
+                          # chunks (to -4 deg on 1a8384c3f6) and broke 2 of 5 rooms, while
+                          # wall sharpness did not improve (scripts/drift_ablation.py)
 MAX_SHIFT = 0.10          # m, largest horizontal correction searched per chunk
 SHIFT_STEP = 0.02         # m, one 2 cm cell of the wall map
 MAX_TURN = 1.0            # degrees, largest turn searched per chunk
@@ -141,7 +144,7 @@ def best_alignment(wall_map, wall_xz, pivot, start_turn, start_shift):
     return best[0], best[1], best[2], start_overlap
 
 
-def correct_drift(chunks, log=print):
+def correct_drift(chunks, log=print, wall_anchor=WALL_ANCHOR):
     """Align fused chunks to each other (see module doc). Returns (points,
     colours, report) with one report row per chunk."""
     all_points = np.concatenate([c["points"] for c in chunks])
@@ -171,7 +174,7 @@ def correct_drift(chunks, log=print):
         band = (points[:, 1] > reference + 0.3) & (points[:, 1] < reference + 2.0)
         wall_xz = points[band][:, [0, 2]]
         overlap = start_overlap = 0
-        if wall_map.walls().any() and len(wall_xz):
+        if wall_anchor and wall_map.walls().any() and len(wall_xz):
             new_turn, new_shift, overlap, start_overlap = best_alignment(wall_map, wall_xz, pivot, turn, shift)
             if overlap >= MIN_OVERLAP and overlap >= MIN_GAIN * start_overlap:
                 turn, shift = new_turn, new_shift

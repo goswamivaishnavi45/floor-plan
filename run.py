@@ -26,11 +26,13 @@ import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from src.layout import build_layout
 from src.plan import draw_plan
 from src.pointcloud import build_pointcloud
-from src.photo import measure_photo_folders
+from src.damage import DamageDetector, lidar_damage, picture_damage, to_outputs
+from src.photo import IMAGE_TYPES as PHOTO_TYPES, load_photos, measure_photo_folders
 from src.result import build_result, validate
 from src.video import measure_pieces, video_pieces
 
@@ -57,7 +59,14 @@ def detect_tier(folder):
     return None
 
 
-def run_lidar(folder, out_dir, step, drift_correction=True):
+def add_damage(result, detections):
+    result["damage"], result["concealed_damage_flags"], result["scope"] = to_outputs(detections, result)
+    result["warnings"] = [w for w in result["warnings"] if not w.startswith("Damage detection is not")]
+    result["warnings"].append(f"Damage: {len(result['damage'])} region(s) found by an open-vocabulary detector "
+                              "(OWLv2) on sharp frames; not validated on staged damage.")
+
+
+def run_lidar(folder, out_dir, step, drift_correction=True, damage=True):
     started = time.time()
     step(1, "building 3D points" + ("" if drift_correction else " (drift correction off)"))
     points, colors, capture, stride = build_pointcloud(folder, out_dir, drift_correction=drift_correction)
@@ -72,10 +81,14 @@ def run_lidar(folder, out_dir, step, drift_correction=True):
     result["warnings"].append("Drift: " + ("frames fused in 20 s chunks re-anchored to the floor where "
                                            "chunks overlap (src/drift.py)" if drift_correction
                                            else "poses used as recorded (--no-drift-correction)") + ".")
+    if damage:
+        print("      searching for damage")
+        add_damage(result, lidar_damage(folder, layout, result, DamageDetector()))
+    result["capture"]["processing_seconds"] = round(time.time() - started, 1)
     return result
 
 
-def run_video(video, capture_id, out_dir, step, rotate):
+def run_video(video, capture_id, out_dir, step, rotate, damage=True):
     started = time.time()
     step(1, "reconstructing video segments")
     pieces, images, info = video_pieces(video, out_dir, rotate)
@@ -86,17 +99,29 @@ def run_video(video, capture_id, out_dir, step, rotate):
     (out_dir / "video_segments.json").write_text(json.dumps(segments, indent=2))
     if result is None:
         sys.exit("error: no part of the video could be reconstructed")
+    if damage:
+        print("      searching for damage")
+        frames = sorted(images.items())
+        frames = [frames[k] for k in np.linspace(0, len(frames) - 1, min(20, len(frames))).astype(int)]
+        add_damage(result, picture_damage([(f"frame {i}", bgr, None) for i, bgr in frames], DamageDetector()))
     step(3, "writing results")
     result["capture"]["processing_seconds"] = round(time.time() - started, 1)
     return result
 
 
-def run_photo(folder, out_dir, step):
+def run_photo(folder, out_dir, step, damage=True):
     started = time.time()
     step(1, "reconstructing each room from its photos")
     capture = {"id": folder.name, "tier": "photo", "source": "photo folders", "processing_seconds": 0.0}
     result = measure_photo_folders(folder, out_dir, capture)
     step(2, "linking rooms through shared doorway photos")
+    if damage:
+        print("      searching for damage")
+        room_ids = {r["name"]: r["id"] for r in result["rooms"]}
+        pictures = [(f"{d.name}/{p['name']}", p["bgr"], room_ids.get(d.name))
+                    for d in sorted(folder.iterdir()) if d.is_dir() and d.name in room_ids
+                    for p in load_photos(d)]
+        add_damage(result, picture_damage(pictures, DamageDetector()))
     step(3, "writing results")
     result["capture"]["processing_seconds"] = round(time.time() - started, 1)
     return result
@@ -107,6 +132,7 @@ def main():
     parser.add_argument("capture", help="capture folder or video file")
     parser.add_argument("--out", default="outputs", help="output root folder (default: outputs)")
     parser.add_argument("--rotate", choices=sorted(ROTATIONS), help="turn sideways video frames upright")
+    parser.add_argument("--no-damage", action="store_true", help="skip damage detection (faster)")
     parser.add_argument("--no-drift-correction", action="store_true",
                         help="LiDAR tier: use the recorded poses as they are (for the on/off comparison)")
     args = parser.parse_args()
@@ -137,11 +163,12 @@ def main():
         print(f"[{n}/3] {label} ...")
 
     if tier == "video":
-        result = run_video(video, capture_id, out_dir, step, ROTATIONS.get(args.rotate))
+        result = run_video(video, capture_id, out_dir, step, ROTATIONS.get(args.rotate), not args.no_damage)
     elif tier == "photo":
-        result = run_photo(folder, out_dir, step)
+        result = run_photo(folder, out_dir, step, not args.no_damage)
     else:
-        result = run_lidar(folder, out_dir, step, drift_correction=not args.no_drift_correction)
+        result = run_lidar(folder, out_dir, step, drift_correction=not args.no_drift_correction,
+                           damage=not args.no_damage)
     print(f"      done in {time.time() - clock['t']:.0f} s")
     validate(result)
     (out_dir / "result.json").write_text(json.dumps(result, indent=2))

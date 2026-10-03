@@ -16,6 +16,11 @@ same capture first) each frame can be filed under the room it was taken in:
      frame within ~1 s of the crossing goes into both rooms' folders (a
      shared view through the doorway, for stitching)
 
+Each photo carries its focal length in EXIF as FocalLengthIn35mmFilm,
+rounded to a whole number the way an iPhone writes it (from the frame's
+exact ARKit focal length in odometry.csv), so the photo tier reads it with
+the same code it uses on real photos, with the same rounding error.
+
 Writes data/photos_<capture>/<room id>/photo_NN.jpg (upright) and
 manifest.json (frame numbers and the LiDAR measurements per room, used only
 to check the photo tier, never as its input).
@@ -28,6 +33,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.compare_depth import upright_rotation  # noqa: E402
@@ -37,6 +43,7 @@ from src.video import sharpness  # noqa: E402
 
 PER_ROOM = 6
 WALL_MARGIN = 0.20     # m: skip frames taken right against a wall
+EXIF_IFD, FOCAL_35MM = 0x8769, 0xA405   # EXIF sub-directory and FocalLengthIn35mmFilm tag
 CROSSING_FRAMES = 60   # frames (~1 s) either side of a room-to-room crossing
 
 
@@ -123,9 +130,16 @@ def main():
             rotation = upright_rotation(capture.poses[i])
             if rotation is not None:
                 frame = cv2.rotate(frame, rotation)
+            # 35 mm-equivalent focal length: focal in pixels scaled from the
+            # image diagonal to a 36 x 24 mm frame's diagonal (43.27 mm).
+            focal_px = capture.K_depth[i][0, 0] * 1920 / 256
+            f35 = round(focal_px * 43.27 / np.hypot(*frame.shape[:2]))
+            exif = Image.Exif()
+            exif.get_ifd(EXIF_IFD)[FOCAL_35MM] = f35
+            picture = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             for room_id, name in chosen[i]:
                 (out / room_id).mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(out / room_id / name), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                picture.save(out / room_id / name, quality=92, exif=exif)
         i += 1
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
 

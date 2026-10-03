@@ -15,7 +15,7 @@ The brief asks for a benchmark we build ourselves. What we have is the provided 
 Required by the brief and **not available**, so the matching gates are reported as not measured rather than estimated:
 
 - **Tape or laser ground truth.** None was provided and we had no access to the apartment. Absolute accuracy gates (opening widths, ceiling height, wall lengths against truth) cannot be scored.
-- **A furnished room with staged damage.** The apartment shows no visible damage.
+- **A furnished room with staged damage.** The apartment shows no visible damage. The detector was checked instead on 3 phone photos of real wall damage (component checks below), without size, since they have no depth.
 - **Native video and photo captures.** The video tier was run on the LiDAR captures' `rgb.mp4` (sideways, `--rotate cw`). Photo folders were cut from `c7d28f72c6`'s video with `scripts/make_photo_folders.py`: frames filed by room using the LiDAR plan, iPhone-style EXIF focal length written in. LiDAR was used only to sort frames and to check results, never as input.
 - **Head-to-head with a consumer app.** It needs magicplan or Polycam run on the same rooms, i.e. access to the apartment and a LiDAR iPhone. Not done.
 
@@ -67,7 +67,8 @@ ARKit's own drift on these captures is about 1-2 cm. The floor anchor keeps the 
 | Video pieces: size and up direction | `scripts/check_pieces.py` | Size error -6% to +44% per piece; up within 2-6 degrees on 5 of 6 pieces |
 | VGGT, 8 overlapping frames of one room | `scripts/check_vggt.py` | Depth error 3.1-4.3%, size wobble 2.9%, camera path 1.2-3.9%, focal 8-16% off |
 | VGGT, photos around a room | `scripts/check_photo_room.py` | Camera error 0.58-0.72 m; two photos off by 55-135 degrees; room shape distorted |
-| Damage detector on clean frames | `src/damage.py` | Highest score 0.26 on undamaged frames, so threshold 0.30 |
+| Damage detector on clean frames | `src/damage.py` | Highest score 0.26 on undamaged frames, so threshold 0.30. The full LiDAR run on `c00a170fe1` still reported one region (mould, score 0.30, exactly at the threshold), probably a false alarm |
+| Damage detector on real damage | 3 phone photos (Samsung A35, HEIC) of damaged walls, `data/damage_photos/` (not in git) | Found 3 real damage areas: a brown water streak (water stain 0.38), a damaged corner joint (peeling paint 0.38), a stained band near the floor (peeling paint 0.40, label debatable). Missed 1: a brown mark (0.12). 2 false alarms: a door frame as crack (0.39), a clean PVC panel as peeling paint (0.42). Useful but not reliable |
 
 ## Timing (laptop, Intel i5-1235U, CPU only, 16 GB)
 

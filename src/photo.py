@@ -21,7 +21,13 @@ import torch
 from PIL import Image, ImageOps
 
 VGGT_DIR = Path(__file__).resolve().parent.parent / "models" / "vggt-1b"
-IMAGE_TYPES = {".jpg", ".jpeg", ".png"}
+IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".heic", ".heif"}
+
+try:   # HEIC is the default photo format on recent iPhones and Samsung phones
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    IMAGE_TYPES -= {".heic", ".heif"}
 EXIF_IFD, FOCAL_35MM = 0x8769, 0xA405
 FULL_FRAME_DIAGONAL = 43.27     # mm, the 36 x 24 mm frame 35 mm-equivalent focal lengths refer to
 VGGT_SIZE_CPU, VGGT_SIZE_GPU = 350, 518   # input size: 518 is what VGGT was trained at;

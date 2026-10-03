@@ -24,7 +24,6 @@ video, turned upright) and compares with the capture's LiDAR:
 import argparse
 import json
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -41,22 +40,41 @@ from src.capture import load_capture  # noqa: E402
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "vggt-1b"
 
 
+def pad_to_square(bgr_frames, size):
+    """VGGT input: each frame scaled so its long side is `size` px (a multiple
+    of 14, VGGT's patch size), padded with white to a square, as RGB in 0-1.
+    Padding keeps every pixel (cropping would cut the top and bottom off).
+    Returns (tensor S x 3 x size x size, content box (top, left, h, w))."""
+    h, w = bgr_frames[0].shape[:2]
+    scale = size / max(h, w)
+    ch, cw = round(h * scale / 14) * 14, round(w * scale / 14) * 14
+    top, left = (size - ch) // 2, (size - cw) // 2
+    batch = np.ones((len(bgr_frames), size, size, 3), np.float32)
+    for k, bgr in enumerate(bgr_frames):
+        rgb = cv2.cvtColor(cv2.resize(bgr, (cw, ch), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
+        batch[k, top:top + ch, left:left + cw] = rgb / 255.0
+    return torch.from_numpy(batch).permute(0, 3, 1, 2).contiguous(), (top, left, ch, cw)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("capture")
     parser.add_argument("--frames", type=int, default=8)
+    parser.add_argument("--size", type=int, default=518, help="input size in px, multiple of 14 (VGGT trained at 518)")
+    parser.add_argument("--start", type=int, default=None, help="first frame of the range to sample from")
+    parser.add_argument("--end", type=int, default=None, help="last frame of the range to sample from")
     args = parser.parse_args()
 
     from vggt.models.vggt import VGGT
-    from vggt.utils.load_fn import load_and_preprocess_images
     from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 
     capture = load_capture(args.capture)
-    total = capture.num_frames
-    indices = [int(i) for i in np.linspace(10, total - 10, args.frames)]
+    start = args.start if args.start is not None else 10
+    end = args.end if args.end is not None else capture.num_frames - 10
+    indices = [int(i) for i in np.linspace(start, end, args.frames)]
     rotation = upright_rotation(capture.poses[indices[len(indices) // 2]])
 
-    # Read the chosen frames (sequentially, see src/capture.py) and save them upright.
+    # Read the chosen frames (sequentially, see src/capture.py), upright.
     wanted, frames = set(indices), {}
     video = cv2.VideoCapture(str(capture.root / "rgb.mp4"))
     i = 0
@@ -64,25 +82,13 @@ def main():
         if i in wanted:
             frames[i] = cv2.rotate(video.retrieve()[1], rotation)
         i += 1
-    tmp = Path(tempfile.mkdtemp())
-    paths = []
-    for i in indices:
-        path = tmp / f"{i:06d}.jpg"
-        cv2.imwrite(str(path), frames[i])
-        paths.append(str(path))
 
     process = psutil.Process()
     started = time.time()
     model = VGGT.from_pretrained(str(MODEL_DIR)).eval()
     loaded = time.time()
-    # "pad" keeps every pixel: the long side becomes 518 px and the short side
-    # is padded with white to a square. (The default "crop" cuts the top and
-    # bottom off, which would misalign the comparison with LiDAR.)
-    images = load_and_preprocess_images(paths, mode="pad")   # (S, 3, 518, 518)
+    images, (top, left, content_h, content_w) = pad_to_square([frames[i] for i in indices], args.size)
     full_h, full_w = frames[indices[0]].shape[:2]
-    content_w = round(full_w * (518 / full_h) / 14) * 14 if full_h >= full_w else 518
-    content_h = 518 if full_h >= full_w else round(full_h * (518 / full_w) / 14) * 14
-    left, top = (518 - content_w) // 2, (518 - content_h) // 2
     with torch.no_grad():
         pred = model(images)
     finished = time.time()
@@ -90,7 +96,7 @@ def main():
     extrinsic, intrinsic = extrinsic[0].numpy(), intrinsic[0].numpy()
     depth = pred["depth"][0, ..., 0].numpy()[:, top:top + content_h, left:left + content_w]
 
-    report = {"frames": len(indices), "input_size": list(images.shape[-2:]),
+    report = {"frames": len(indices), "range": [indices[0], indices[-1]], "input_size": args.size,
               "seconds_load": round(loaded - started, 1), "seconds_run": round(finished - loaded, 1),
               "peak_ram_gb": round(process.memory_info().peak_wset / 1e9, 2)
               if hasattr(process.memory_info(), "peak_wset") else None}

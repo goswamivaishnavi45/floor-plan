@@ -146,3 +146,121 @@ def room_points(photos, recon, depth_model, use_exif_focal=True, log=print):
             "ratio_spread": round(float(np.std(ratios) / np.mean(ratios)), 3),
             "focal_px_used": [round(f, 1) for f in focal_used]}
     return points, colours, info
+
+
+# Part 7d: the photo tier for a whole property, with a quality gate.
+PHOTO_SCALE_SIGMA = 0.15     # 1-sigma size uncertainty when a room passes the gate; not
+                             # calibrated (no room passed on our test photos), so wide
+MAX_RATIO_SPREAD = 0.10      # photos must agree on size within 10% (Depth Anything / VGGT)
+MIN_SIDES = 3                # walls must be found on at least 3 of the room's 4 sides
+
+
+def shared_photos(room_folders):
+    """Rooms connected by a doorway photo: the same picture saved in two
+    room folders (the capture protocol asks for this). Compared by content
+    hash, so file names do not matter. Returns [(room a, room b, file name)]."""
+    import hashlib
+
+    seen = {}
+    for name, folder in room_folders.items():
+        for path in sorted(folder.iterdir()):
+            if path.suffix.lower() in IMAGE_TYPES:
+                digest = hashlib.sha1(path.read_bytes()).hexdigest()
+                seen.setdefault(digest, []).append((name, path.name))
+    links = []
+    for copies in seen.values():
+        rooms = sorted({room for room, _ in copies})
+        for a in range(len(rooms)):
+            for b in range(a + 1, len(rooms)):
+                links.append((rooms[a], rooms[b], copies[0][1]))
+    return links
+
+
+def measure_photo_folders(folder, out_dir, capture_info, log=print):
+    """Photo tier: one result for a folder of room folders.
+
+    Each room is reconstructed from its own photos (room_points) and run
+    through the LiDAR layout. Its numbers are reported only if it passes the
+    quality gate: walls on >= MIN_SIDES sides and photos agreeing on size
+    within MAX_RATIO_SPREAD. Otherwise the room is listed as not measured,
+    with the reason. Adjacency comes from doorway photos shared between
+    room folders, which needs no reconstruction at all.
+    """
+    from src.layout import build_layout
+    from src.mono_depth import DepthModel
+    from src.pointcloud import horizontal_levels, save_ply
+    from src.result import build_result
+
+    folder = Path(folder)
+    room_folders = {d.name: d for d in sorted(folder.iterdir())
+                    if d.is_dir() and any(f.suffix.lower() in IMAGE_TYPES for f in d.iterdir())}
+    depth_model = DepthModel()
+    result = {
+        "schema_version": "1.0", "capture": capture_info, "units": "metres",
+        "rooms": [], "openings": [], "adjacency": [],
+        "damage": [], "concealed_damage_flags": [], "scope": [],
+        "warnings": [
+            "Photo tier: rooms are reconstructed from their photos with VGGT and given a size with an AI "
+            "depth model; a room's numbers are reported only if it passes a quality check, otherwise it is "
+            "listed as not measured. Rooms are not placed relative to each other; plan.png is a schematic.",
+            "Damage detection is not implemented in this version; damage, flags and scope are empty.",
+        ],
+    }
+    names = {}
+    for n, (name, room_folder) in enumerate(room_folders.items(), start=1):
+        room_id = f"R{n}"
+        names[name] = room_id
+        photos = load_photos(room_folder)
+        entry = {"id": room_id, "name": name, "photos": len(photos), "shape": "not measured",
+                 "width": {"value": None, "pm95": None}, "length": {"value": None, "pm95": None},
+                 "floor_area": {"value": None, "pm95": None},
+                 "ceiling_height": {"value": None, "pm95": None}, "walls": []}
+        reason = None
+        if len(photos) < 2:
+            reason = "fewer than 2 photos"
+        else:
+            log(f"      {name}: {len(photos)} photos, reconstructing")
+            recon = run_vggt([p["bgr"] for p in photos])
+            points, colours, info = room_points(photos, recon, depth_model)
+            floor_y, _ = horizontal_levels(points)
+            points[:, 1] -= floor_y
+            room_dir = Path(out_dir) / f"room_{name}"
+            room_dir.mkdir(parents=True, exist_ok=True)
+            save_ply(room_dir / "pointcloud.ply", points, colours)
+            layout, grid, labels = build_layout(points, colours, room_dir)
+            if not layout["rooms"]:
+                reason = "no room outline found in the reconstruction"
+            else:
+                best = max(layout["rooms"], key=lambda r: r["area_m2_rough"])
+                sides = 4 - len(best["missing_sides"])
+                if sides < MIN_SIDES:
+                    reason = f"walls found on only {sides} of 4 sides"
+                elif info["ratio_spread"] > MAX_RATIO_SPREAD:
+                    reason = f"photos disagree on size by {100 * info['ratio_spread']:.0f}%"
+                else:
+                    layout["rooms"] = [best]
+                    measured = build_result(layout, grid, labels, dict(capture_info),
+                                            scale_sigma=PHOTO_SCALE_SIGMA)["rooms"][0]
+                    measured.update({"id": room_id, "name": name, "photos": len(photos)})
+                    for k, wall in enumerate(measured["walls"], start=1):
+                        wall["id"] = f"{room_id}-W{k}"
+                    entry = measured
+            log(f"      {name}: " + (f"measured {entry['width']['value']} x {entry['length']['value']} m"
+                                     if reason is None else f"not measured ({reason})"))
+        if reason:
+            note = f"not measured: {reason}"
+            for key in ("width", "length", "floor_area", "ceiling_height"):
+                entry[key]["note"] = note
+            result["warnings"].append(f"{room_id} ({name}): {note}.")
+        result["rooms"].append(entry)
+
+    for a, b, photo in shared_photos(room_folders):
+        result["adjacency"].append({"rooms": [names[a], names[b]], "via": f"shared photo {photo}"})
+
+    measured = [r["floor_area"] for r in result["rooms"] if r["floor_area"]["value"] is not None]
+    total = {"value": round(sum(m["value"] for m in measured), 3) if measured else None,
+             "pm95": round(float(np.sqrt(sum(m["pm95"] ** 2 for m in measured))), 3) if measured else None}
+    if len(measured) < len(result["rooms"]):
+        total["note"] = f"sum over {len(measured)} of {len(result['rooms'])} rooms (the rest not measured)"
+    result["property"] = {"room_count": len(result["rooms"]), "total_floor_area": total}
+    return result

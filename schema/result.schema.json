@@ -46,7 +46,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "name", "outline", "shape", "width", "length", "floor_area", "ceiling_height", "walls"],
+        "required": ["id", "name", "shape", "width", "length", "floor_area", "ceiling_height", "walls"],
         "additionalProperties": false,
         "properties": {
           "id": {"type": "string", "pattern": "^R[0-9]+$"},
@@ -54,8 +54,9 @@
           "segment": {"type": "integer", "minimum": 1,
                       "description": "video tier only: the video segment this room was measured in; rooms of different segments are not placed relative to each other"},
           "outline": {"type": "array", "items": {"$ref": "#/$defs/point"}, "minItems": 3,
-                      "description": "corners in order around the room"},
-          "shape": {"enum": ["rectangular", "not rectangular"]},
+                      "description": "corners in order around the room; absent when the room was not measured"},
+          "shape": {"enum": ["rectangular", "not rectangular", "not measured"]},
+          "photos": {"type": "integer", "minimum": 0, "description": "photo tier only: number of photos in the room's folder"},
           "width": {"$ref": "#/$defs/measure", "description": "extent along x"},
           "length": {"$ref": "#/$defs/measure", "description": "extent along z"},
           "floor_area": {"$ref": "#/$defs/measure"},

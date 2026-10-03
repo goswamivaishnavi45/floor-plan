@@ -93,7 +93,49 @@ def draw_panel(rooms, openings, header_lines):
     return image
 
 
+def draw_schematic(result, path):
+    """Photo tier: rooms are not placed relative to each other, so draw a
+    connection diagram instead of a floor plan: one box per room on a grid,
+    a line for each doorway shared between two rooms."""
+    rooms = result["rooms"]
+    cols = int(np.ceil(np.sqrt(len(rooms)))) or 1
+    box_w, box_h, gap = 260, 120, 90
+    rows = int(np.ceil(len(rooms) / cols)) or 1
+    image = np.full((HEADER + 40 + rows * (box_h + gap), 40 + cols * (box_w + gap), 3), 255, np.uint8)
+    centres = {}
+    for k, room in enumerate(rooms):
+        x = 40 + (k % cols) * (box_w + gap)
+        y = HEADER + 40 + (k // cols) * (box_h + gap)
+        centres[room["id"]] = (x + box_w // 2, y + box_h // 2)
+    for link in result["adjacency"]:
+        a, b = link["rooms"]
+        cv2.line(image, centres[a], centres[b], DOOR, 3, cv2.LINE_AA)
+    for k, room in enumerate(rooms):
+        cx, cy = centres[room["id"]]
+        measured = room["width"]["value"] is not None
+        cv2.rectangle(image, (cx - box_w // 2, cy - box_h // 2), (cx + box_w // 2, cy + box_h // 2),
+                      ROOM_FILL if measured else (235, 235, 235), -1)
+        cv2.rectangle(image, (cx - box_w // 2, cy - box_h // 2), (cx + box_w // 2, cy + box_h // 2), WALL, 3)
+        lines = [(f"{room['id']}  {room['name']}", 0.55, 2)]
+        if measured:
+            lines.append((f"{room['width']['value']:.2f} x {room['length']['value']:.2f} m", 0.45, 1))
+            lines.append((f"{room['floor_area']['value']:.1f} +-{room['floor_area']['pm95']:.1f} m2", 0.45, 1))
+        else:
+            lines.append(("size not measured", 0.45, 1))
+        lines.append((f"{room.get('photos', 0)} photos", 0.4, 1))
+        for n, (text, scale, thickness) in enumerate(lines):
+            centred_text(image, text, (cx, cy - 30 + 22 * n), scale, TEXT, thickness)
+    cv2.putText(image, f"{result['capture']['id']}  |  photo tier  |  {len(rooms)} rooms, "
+                       f"{len(result['adjacency'])} connections", (20, 30), FONT, 0.6, TEXT, 2, cv2.LINE_AA)
+    cv2.putText(image, "schematic, not to scale: boxes are rooms, red lines are doorways seen in shared photos",
+                (20, 52), FONT, 0.42, DIM, 1, cv2.LINE_AA)
+    cv2.imwrite(str(path), image)
+
+
 def draw_plan(result, path):
+    if result["capture"]["tier"] == "photo":
+        draw_schematic(result, path)
+        return
     total = result["property"]["total_floor_area"]
     title = (f"{result['capture']['id']}  |  {result['capture']['tier']} tier  |  "
              f"{result['property']['room_count']} rooms, {total['value']:.1f} +-{total['pm95']:.1f} m2")

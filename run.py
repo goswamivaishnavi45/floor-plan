@@ -14,7 +14,9 @@ Tiers:
             measured per video segment (see src/video.py). Use --rotate
             cw|ccw|180 for videos stored sideways, e.g. Stray Scanner's
             rgb.mp4; iPhone Camera videos are upright already.
-    photo   a folder of sub-folders, one per room, holding images [not yet supported]
+    photo   a folder of sub-folders, one per room, holding 2-8 photos; a doorway
+            photo saved in two room folders links those rooms. Rooms are
+            measured only if they pass a quality check (see src/photo.py)
 """
 
 import argparse
@@ -28,6 +30,7 @@ import cv2
 from src.layout import build_layout
 from src.plan import draw_plan
 from src.pointcloud import build_pointcloud
+from src.photo import measure_photo_folders
 from src.result import build_result, validate
 from src.video import measure_pieces, video_pieces
 
@@ -85,6 +88,17 @@ def run_video(video, capture_id, out_dir, step, rotate):
     return result
 
 
+def run_photo(folder, out_dir, step):
+    started = time.time()
+    step(1, "reconstructing each room from its photos")
+    capture = {"id": folder.name, "tier": "photo", "source": "photo folders", "processing_seconds": 0.0}
+    result = measure_photo_folders(folder, out_dir, capture)
+    step(2, "linking rooms through shared doorway photos")
+    step(3, "writing results")
+    result["capture"]["processing_seconds"] = round(time.time() - started, 1)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("capture", help="capture folder or video file")
@@ -98,9 +112,6 @@ def main():
     tier = detect_tier(folder)
     if tier is None:
         sys.exit(f"error: could not tell what kind of capture {folder} is (see `python run.py --help`)")
-    if tier == "photo":
-        sys.exit("error: photo captures are not supported yet")
-
     video = None
     capture_id = folder.name
     if tier == "video":
@@ -122,6 +133,8 @@ def main():
 
     if tier == "video":
         result = run_video(video, capture_id, out_dir, step, ROTATIONS.get(args.rotate))
+    elif tier == "photo":
+        result = run_photo(folder, out_dir, step)
     else:
         result = run_lidar(folder, out_dir, step)
     print(f"      done in {time.time() - clock['t']:.0f} s")
@@ -130,8 +143,9 @@ def main():
     draw_plan(result, out_dir / "plan.png")
 
     total = result["property"]["total_floor_area"]
+    area = f"{total['value']:.1f} +- {total['pm95']:.1f} m2" if total["value"] is not None else "not measured"
     print(f"{result['property']['room_count']} rooms, {len(result['openings'])} doors, "
-          f"total floor area {total['value']:.1f} +- {total['pm95']:.1f} m2, "
+          f"{len(result['adjacency'])} connections, total floor area {area}, "
           f"{result['capture']['processing_seconds']:.0f} s")
     print(f"-> {out_dir / 'result.json'}")
     print(f"-> {out_dir / 'plan.png'}")

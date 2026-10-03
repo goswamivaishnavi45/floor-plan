@@ -69,7 +69,7 @@ ARKit's own drift on these captures is about 1-2 cm. The floor anchor keeps the 
 | VGGT, 8 overlapping frames of one room | `scripts/check_vggt.py` | Depth error 3.1-4.3%, size wobble 2.9%, camera path 1.2-3.9%, focal 8-16% off |
 | VGGT, photos around a room | `scripts/check_photo_room.py` | Camera error 0.58-0.72 m; two photos off by 55-135 degrees; room shape distorted |
 | Damage detector on clean frames | `src/damage.py` | Highest score 0.26 on undamaged frames, so threshold 0.30. The full LiDAR run on `c00a170fe1` still reported one region (mould, score 0.30, exactly at the threshold), probably a false alarm |
-| Damage detector on real damage | 3 phone photos (Samsung A35, HEIC) of damaged walls, `data/damage_photos/` (not in git) | Found 3 real damage areas: a brown water streak (water stain 0.38), a damaged corner joint (peeling paint 0.38), a stained band near the floor (peeling paint 0.40, label debatable). Missed 1: a brown mark (0.12). 2 false alarms: a door frame as crack (0.39), a clean PVC panel as peeling paint (0.42). Useful but not reliable |
+| Damage detector on real damage | `scripts/check_damage_photos.py data/damage_photos` on 3 phone photos (Samsung A35, HEIC) of damaged walls (photos not in git) | Found 3 real damage areas: a brown water streak (water stain 0.38), a damaged corner joint (peeling paint 0.38), a stained band near the floor (peeling paint 0.40, label debatable). Missed 1: a brown mark (0.12). 2 false alarms: a door frame as crack (0.39), a clean PVC panel as peeling paint (0.42). Useful but not reliable |
 
 ## Timing (laptop, Intel i5-1235U, CPU only, 16 GB)
 

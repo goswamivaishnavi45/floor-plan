@@ -37,7 +37,7 @@ Status: **done**, **partial** (exists but falls short, with the reason), **missi
 | Requirement | File | Artifact | Status |
 |---|---|---|---|
 | Head-to-head vs a consumer app on 2 rooms | `BENCHMARK.md` | | missing: needs the apartment and a LiDAR iPhone |
-| Fix loop: declaration, before, after, diff | `fixloop/` | `declaration.md` (before the fix), `before/`, `after/`, `postmortem.md`; diff `git diff 32c0ecf 6cab0ca -- src/layout.py` | done (gate not passed; prediction missed, post-mortem explains) |
+| Fix loop: declaration, before, after, diff | `fixloop/` | `declaration.md` (before the fix), `before/`, `after/`, `fix.diff` (the code change), `postmortem.md` (with the follow-up) | done (gate not passed; prediction missed, post-mortem explains) |
 | Process evidence: commit as you work | git history | 35+ commits over two days, each with its reasoning and measured results | done |
 
 ## Deliverables

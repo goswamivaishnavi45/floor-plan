@@ -73,6 +73,8 @@ All commands run from the repository root after setup.
 | Photo room checks | `python scripts/check_photo_room.py data/photos_c7d28f72c6 R3 --size 518` |
 | Video tier | `python run.py data/c00a170fe1/rgb.mp4 --rotate cw` |
 | Photo tier | `python run.py data/photos_c7d28f72c6` |
+| Damage detector on photos | `python scripts/check_damage_photos.py <folder of photos>` |
+| Fix-loop code change | `fixloop/fix.diff` (or `git diff 32c0ecf 6cab0ca -- src/layout.py`) |
 
 COLMAP runs with a fixed random seed, so the video tier gives the same pieces on a re-run.
 

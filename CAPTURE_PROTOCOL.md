@@ -62,7 +62,7 @@ Copy with a cable, AirDrop or iCloud **as originals** (not WhatsApp, which strip
 
 | Tier | Runs on | Capture app | What it delivers on our benchmark (honest) |
 |---|---|---|---|
-| LiDAR | iPhone 12 Pro and newer Pro / Pro Max (LiDAR sensor) | Stray Scanner | Stitched plan with rooms, walls, ceiling heights, doorways. Walls repeat between two captures within 0.5 cm (median); room dimensions repeat within 1 cm / 0.5% for 7% of dimensions (room division differs). Ranges assume 5 mm per surface; not checked against tape. |
+| LiDAR | iPhone 12 Pro and newer Pro / Pro Max (LiDAR sensor) | Stray Scanner | Stitched plan with rooms, walls, ceiling heights, doorways. Wall detection repeats between two captures; room dimensions repeat within 1 cm / 0.5% for 2 of 14 dimensions (14%), because the two captures still divide some rooms differently. Ranges assume 5 mm per surface; not checked against tape. |
 | Video | Any iPhone 15 or newer (any phone camera works the same way) | Camera app | Runs end to end. Classical reconstruction breaks into pieces on plain walls; on our video no complete room was found. Sizes would carry about +-20% (95%). |
 | Photo | Any iPhone 15 or newer (any phone camera; focal length read from EXIF) | Camera app | Runs end to end; links rooms through shared doorway photos (4 of 4 on our test set). Room sizes are reported only if a quality check passes; on our test photos (cut from video) none passed. |
 | All | — | — | Damage detection (OWLv2) on every tier; sizes in metres only on the LiDAR tier. |

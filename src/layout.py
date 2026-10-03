@@ -338,9 +338,12 @@ def grow(seeds, free):
     free = free.astype(bool)
     while True:
         changed = False
+        h, w = labels.shape
         for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            # neighbour[r, c] = labels[r - dr, c - dc]: the label one step away
             neighbour = np.zeros_like(labels)
-            neighbour[max(dr, 0):labels.shape[0] + min(dr, 0), max(dc, 0):labels.shape[1] + min(dc, 0)] =                 labels[max(-dr, 0):labels.shape[0] + min(-dr, 0), max(-dc, 0):labels.shape[1] + min(-dc, 0)]
+            neighbour[max(dr, 0):h + min(dr, 0), max(dc, 0):w + min(dc, 0)] = \
+                labels[max(-dr, 0):h + min(-dr, 0), max(-dc, 0):w + min(-dc, 0)]
             take = (labels == 0) & free & (neighbour > 0)
             if take.any():
                 labels[take] = neighbour[take]

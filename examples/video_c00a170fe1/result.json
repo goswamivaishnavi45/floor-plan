@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "capture": {
+    "id": "c00a170fe1_video",
+    "tier": "video",
+    "source": "rgb.mp4",
+    "frames": 300,
+    "frames_used": 247,
+    "processing_seconds": 604.5,
+    "drift_sigma_m": 0.003,
+    "plan_rotation_deg": 86.35
+  },
+  "units": "metres",
+  "rooms": [],
+  "openings": [],
+  "adjacency": [],
+  "damage": [
+    {
+      "id": "D1",
+      "class": "water stain",
+      "score": 0.53,
+      "room": null,
+      "surface": null,
+      "surface_type": "unknown",
+      "seen_in": "frame 1352",
+      "sightings": 1,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    },
+    {
+      "id": "D2",
+      "class": "mould",
+      "score": 0.31,
+      "room": null,
+      "surface": null,
+      "surface_type": "unknown",
+      "seen_in": "frame 1078",
+      "sightings": 1,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    }
+  ],
+  "concealed_damage_flags": [
+    {
+      "damage": "D2",
+      "rule": "C3",
+      "condition": "mould anywhere",
+      "flag": "hidden moisture likely behind or around the surface",
+      "surface": null
+    }
+  ],
+  "scope": [
+    {
+      "id": "S1",
+      "surface": null,
+      "damage": "D1",
+      "action": "Stain-block primer and repaint",
+      "quantity": null,
+      "unit": "m2"
+    },
+    {
+      "id": "S2",
+      "surface": null,
+      "damage": "D2",
+      "action": "Mould treatment, stain-block and repaint",
+      "quantity": null,
+      "unit": "m2"
+    }
+  ],
+  "warnings": [
+    "Video: rooms are measured separately in 6 of 6 video segments and are NOT stitched into one plan; the same real room may be listed once per segment that saw it, so the total floor area can double count.",
+    "Only rooms with walls found on at least 3 of 4 sides are reported.",
+    "Sizes come from an AI depth model; every range includes a 10% (1 sigma) size uncertainty.",
+    "Damage: 2 region(s) found by an open-vocabulary detector (OWLv2) on sharp frames; not validated on staged damage."
+  ],
+  "property": {
+    "room_count": 0,
+    "total_floor_area": {
+      "value": 0,
+      "pm95": 0.0
+    }
+  }
+}

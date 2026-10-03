@@ -46,6 +46,14 @@ Required by the brief and **not available**, so the matching gates are reported 
 
 The fix loop (narrow-passage room split) made rooms match; the follow-up (the post-mortem's next fix: each room side is the wall that bounds the grown room along most of that side, with the room on one side only, instead of the wall nearest the painted floor edge) raised repeatable dimensions from 1 to 2 of 14. The wall-median row compares the walls rooms picked as sides, so it changes with the rule; wall detection itself is unchanged. The remaining differences (0.1-2.4 m) come mostly from the two captures still dividing some rooms differently (R6/R8 overlap 0.33). See `fixloop/postmortem.md`.
 
+## Head-to-head with a consumer app
+
+Not done. The brief asks for our LiDAR output against magicplan or Polycam on 2 of our benchmark rooms, with ground truth for both. Our rooms are the sample apartment, which we could not visit, and no LiDAR iPhone was available to run either app. The table below is what would be filled in:
+
+| Room | Dimension | Ground truth | Ours (error) | magicplan / Polycam (error) |
+|---|---|---|---|---|
+| (not measured) | | | | |
+
 ## Drift ablation (LiDAR)
 
 `python scripts/drift_ablation.py data/<capture>`: the same 20 s chunks merged with the recorded poses (off) and with correction (on). Pictures: `outputs/<capture>_drift_ablation.png`.

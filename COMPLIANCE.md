@@ -61,4 +61,4 @@ Status: **done**, **partial** (exists but falls short, with the reason), **missi
 | Pretrained models disclosed | `scripts/fetch_models.py`, `TECHNICAL_REPORT.md` | done (Depth Anything V2, VGGT-1B (non-commercial licence), OWLv2) |
 | Runs without our infrastructure | all | done: runs offline on a laptop CPU after `fetch_models.py` |
 | Weights fetched by script | `scripts/fetch_models.py` | done |
-| Mirrors, glass, wet-look surfaces, low light covered | `src/pointcloud.py` (`valid_mask`), `TECHNICAL_REPORT.md` | partial: low-confidence LiDAR returns dropped; glass walls go missing (known failure) |
+| Mirrors, glass, wet-look surfaces, low light covered | `src/pointcloud.py` (`valid_mask`), `TECHNICAL_REPORT.md` section 7 (items 2-4), `CAPTURE_PROTOCOL.md` (lights on, avoid mirrors and glass) | partial: low-confidence LiDAR returns dropped; glass walls go missing; glossy surfaces broke video tracking; LiDAR works in low light, the other tiers do not |

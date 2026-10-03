@@ -86,15 +86,17 @@ Declaration first (`fixloop/declaration.md`, commit `32c0ecf`), then the fix (`6
 ## 7. Known failure modes
 
 1. **Room sizes are not repeatable** (section 6: 2 of 14 dimensions within the gate), though wall detection is.
-2. **Glass, mirrors, windows:** low-confidence LiDAR returns are dropped, so glass walls go missing and rooms can leak through them; curtains make wavy walls.
-3. **Open plan and wide openings** (over 0.9 m) stay one room. Corridors under 0.9 m and cupboards are absorbed into neighbours.
-4. **Floor-only captures** cannot give ceiling heights; the output says "not seen".
-5. **Video:** plain walls fragment COLMAP. No complete room on our video; segments are not stitched.
-6. **Photo:** VGGT misplaces photos spread around a plain-walled room; rooms come out "not measured". Real overlapping photos taken per the protocol may do better; untested.
-7. **AI-depth size bias** (1.35x) was measured on one apartment only.
-8. **Damage:** on 3 phone photos of real damage the detector found 3 areas, missed 1 and raised 2 false alarms (a door frame as a crack, a clean panel as peeling paint); not validated on staged damage in a capture. Sizes are box-based (±15%) and assume a frontal view; video and photo tiers give no size.
-9. **Multi-storey homes:** one plan for all floors; stairs are not modelled.
-10. **Speed on CPU:** photo tier about 3 min per room, damage about 10 s per frame.
+2. **Glass, mirrors, windows:** low-confidence LiDAR returns are dropped, so glass walls go missing and rooms can leak through them; a mirror can add a phantom room behind it if a confident return slips through. Curtains make wavy walls.
+3. **Wet-look and glossy surfaces:** shiny floor tiles and wet surfaces reflect the laser and the room lights. LiDAR confidence drops there, which costs points rather than adding wrong ones, but reflections that move as the phone moves broke COLMAP tracking on this home (video tier). The damage detector can mistake a glossy panel for damage (one false alarm on our photos).
+4. **Low light:** LiDAR brings its own infrared light, so the LiDAR tier still measures in the dark. ARKit tracking, the colour video, the video and photo tiers and damage detection need visible light, so the capture protocol asks for every light on.
+5. **Open plan and wide openings** (over 0.9 m) stay one room. Corridors under 0.9 m and cupboards are absorbed into neighbours.
+6. **Floor-only captures** cannot give ceiling heights; the output says "not seen".
+7. **Video:** plain walls fragment COLMAP. No complete room on our video; segments are not stitched.
+8. **Photo:** VGGT misplaces photos spread around a plain-walled room; rooms come out "not measured". Real overlapping photos taken per the protocol may do better; untested.
+9. **AI-depth size bias** (1.35x) was measured on one apartment only.
+10. **Damage:** on 3 phone photos of real damage the detector found 3 areas, missed 1 and raised 2 false alarms (a door frame as a crack, a clean panel as peeling paint); not validated on staged damage in a capture. Sizes are box-based (±15%) and assume a frontal view; video and photo tiers give no size.
+11. **Multi-storey homes:** one plan for all floors; stairs are not modelled.
+12. **Speed on CPU:** photo tier about 3 min per room, damage about 10 s per frame.
 
 ## Models and licences
 

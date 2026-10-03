@@ -55,6 +55,8 @@ ALIGN_TOLERANCE = 0.15   # two walls this close sideways count as one line
 CLOSE_AS_WALL = 0.60     # gaps shorter than this are holes in a wall: close them
 DOOR_MIN, DOOR_MAX = 0.60, 1.20   # gaps this wide are doorways: close and record them
 MIN_ROOM_AREA = 1.5      # m^2; smaller painted areas are corners or clutter
+DOOR_SPLIT = 0.45        # m: shrinking the floor by this closes passages under 0.9 m
+                         # (doorways are 0.7-0.9 m) so each room becomes its own island
 
 # Height settings (part 4d)
 MIN_CEILING_ABOVE_FLOOR = 1.8   # no room has a lower ceiling; below this is furniture
@@ -322,15 +324,45 @@ class Grid:
         return ((xz - self.origin) / GRID).astype(int).T   # (columns, rows)
 
 
+def grow(seeds, free):
+    """Grow labelled seeds over the free cells, one cell per step through
+    up/down/left/right neighbours, until nothing changes: each free cell ends
+    up with the label of the seed it is closest to through free space (walls
+    block the growth)."""
+    labels = seeds.copy()
+    free = free.astype(bool)
+    while True:
+        changed = False
+        for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            neighbour = np.zeros_like(labels)
+            neighbour[max(dr, 0):labels.shape[0] + min(dr, 0), max(dc, 0):labels.shape[1] + min(dc, 0)] =                 labels[max(-dr, 0):labels.shape[0] + min(-dr, 0), max(-dc, 0):labels.shape[1] + min(-dc, 0)]
+            take = (labels == 0) & free & (neighbour > 0)
+            if take.any():
+                labels[take] = neighbour[take]
+                changed = True
+        if not changed:
+            return labels
+
+
 def find_rooms(points, floor_y, walls):
-    """Paint-bucket rooms: floor that is enclosed by walls and closed gaps.
+    """Rooms: the free floor split at narrow passages.
 
     1. Mark every grid square where anything was seen, at any height; fill
        small holes. LiDAR cannot see through walls, so any point is inside
        the home. Using only floor points left rooms patchy: the floor is
        hidden under furniture and the phone rarely looked straight down.
-    2. Draw walls (stretched at the ends) and all gaps as barriers.
-    3. Every connected patch not crossed by a barrier is a room.
+    2. Draw walls (stretched at the ends) and small wall holes as barriers.
+    3. Shrink the free floor by DOOR_SPLIT: every passage narrower than
+       twice that (doorways are 70-90 cm) closes, so each room becomes a
+       separate island, its seed.
+    4. Grow the seeds back over the free floor (grow()), so neighbouring
+       rooms meet at their doorways.
+    Fix loop (fixloop/declaration.md): rooms used to be split only where
+    both wall ends of a doorway were detected and joined; a missed wall end
+    let rooms merge differently in two captures of the same home (17% of
+    room dimensions repeatable). Splitting at narrow passages depends only
+    on the shape of the floor, which repeats (walls within 0.5 cm). Doorway
+    gaps are still recorded as openings.
     Returns (grid, label image, rooms, gaps).
     """
     grid = Grid(points)
@@ -348,10 +380,14 @@ def find_rooms(points, floor_y, walls):
         b = grid.cell(*wall_point(w, w["end"] + WALL_EXTEND))
         cv2.line(barrier, a, b, 1, 2)
     for g in gaps:
-        cv2.line(barrier, grid.cell(*g["a"]), grid.cell(*g["b"]), 1, 2)
+        if g["kind"] == "wall":
+            cv2.line(barrier, grid.cell(*g["a"]), grid.cell(*g["b"]), 1, 2)
 
     free = (floor & (1 - barrier)).astype(np.uint8)
-    count, labels = cv2.connectedComponents(free, connectivity=4)
+    k = 2 * int(round(DOOR_SPLIT / GRID)) + 1
+    islands = cv2.erode(free, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    count, seeds = cv2.connectedComponents(islands, connectivity=4)
+    labels = grow(seeds.astype(np.int32), free)
 
     rooms, room_labels = [], np.zeros_like(labels)
     for label in range(1, count):

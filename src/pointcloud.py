@@ -73,27 +73,48 @@ def voxel_downsample(points, colors, weights, voxel):
             total_weight)
 
 
-def fuse(capture, stride):
+def fuse_chunks(capture, stride, chunk_seconds=None):
+    """Fuse frames into clouds, one per time chunk of `chunk_seconds` (one
+    chunk for the whole capture if None). Each chunk is a dict with points,
+    colors, weights (raw points per voxel) and its first/last frame. The
+    video is read once, front to back."""
     frames = [i for i in range(0, capture.num_frames, stride) if capture.has_depth[i]]
-    points, colors, weights = [], [], []
+    t0 = capture.timestamps[0]
+
+    def chunk_of(i):
+        return 0 if chunk_seconds is None else int((capture.timestamps[i] - t0) // chunk_seconds)
+
+    chunks = {}
     for n, (i, bgr) in enumerate(capture.rgb_frames(frames)):
         depth = capture.depth(i)
         mask = valid_mask(depth, capture.confidence(i))
         cam = backproject(depth, capture.K_depth[i], mask)
         pose = capture.poses[i]
-        points.append(cam @ pose[:3, :3].T + pose[:3, 3])
-        colors.append(bgr[mask][:, ::-1].astype(np.float64))   # BGR -> RGB
-        weights.append(np.ones(len(cam)))
-        # Downsample in chunks so memory stays bounded on long captures.
-        if len(points) >= 50:
-            merged = voxel_downsample(np.concatenate(points), np.concatenate(colors),
-                                      np.concatenate(weights), VOXEL)
-            points, colors, weights = [merged[0]], [merged[1]], [merged[2]]
+        c = chunks.setdefault(chunk_of(i), {"points": [], "colors": [], "weights": [], "first": i, "last": i})
+        c["points"].append(cam @ pose[:3, :3].T + pose[:3, 3])
+        c["colors"].append(bgr[mask][:, ::-1].astype(np.float64))   # BGR -> RGB
+        c["weights"].append(np.ones(len(cam)))
+        c["last"] = i
+        # Downsample as we go so memory stays bounded on long captures.
+        if len(c["points"]) >= 50:
+            merged = voxel_downsample(np.concatenate(c["points"]), np.concatenate(c["colors"]),
+                                      np.concatenate(c["weights"]), VOXEL)
+            c["points"], c["colors"], c["weights"] = [merged[0]], [merged[1]], [merged[2]]
         if n % 100 == 0:
             print(f"  frame {i}/{capture.num_frames}")
-    points, colors, _ = voxel_downsample(np.concatenate(points), np.concatenate(colors),
-                                         np.concatenate(weights), VOXEL)
-    return points, colors
+    out = []
+    for key in sorted(chunks):
+        c = chunks[key]
+        p, col, w = voxel_downsample(np.concatenate(c["points"]), np.concatenate(c["colors"]),
+                                     np.concatenate(c["weights"]), VOXEL)
+        out.append({"points": p, "colors": col, "weights": w, "first": c["first"], "last": c["last"]})
+    return out
+
+
+def fuse(capture, stride):
+    """All frames of a capture in one cloud, poses used as recorded."""
+    chunk = fuse_chunks(capture, stride)[0]
+    return chunk["points"], chunk["colors"]
 
 
 def horizontal_levels(points, bin_size=0.02):

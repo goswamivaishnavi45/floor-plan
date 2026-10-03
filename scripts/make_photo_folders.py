@@ -9,9 +9,9 @@ same capture first) each frame can be filed under the room it was taken in:
 
   1. turn the phone position by the plan's straightening angle and look it
      up in the room outlines (frames within 20 cm of a wall are skipped)
-  2. per room, keep PER_ROOM sharp photos facing different directions, the
-     way a person turns around a room: split the full turn into PER_ROOM
-     sectors and take the sharpest frame facing into each
+  2. per room, take the longest continuous stay and keep the sharpest frame
+     of each of PER_ROOM equal time windows, like a person turning slowly
+     and taking overlapping photos
   3. wherever the walk crosses from one room into another, the sharpest
      frame within ~1 s of the crossing goes into both rooms' folders (a
      shared view through the doorway, for stitching)
@@ -41,7 +41,7 @@ from src.capture import load_capture  # noqa: E402
 from src.layout import rotate_about_vertical  # noqa: E402
 from src.video import sharpness  # noqa: E402
 
-PER_ROOM = 6
+PER_ROOM = 8
 WALL_MARGIN = 0.20     # m: skip frames taken right against a wall
 EXIF_IFD, FOCAL_35MM = 0x8769, 0xA405   # EXIF sub-directory and FocalLengthIn35mmFilm tag
 CROSSING_FRAMES = 60   # frames (~1 s) either side of a room-to-room crossing
@@ -83,17 +83,25 @@ def main():
     manifest = {"capture": args.capture, "rooms": {}, "doorways": []}
     for room in result["rooms"]:
         inside = [i for i in range(capture.num_frames) if rooms_of_frame[i] == room["id"]]
+        # The longest continuous stay in the room (gaps under 1 s allowed),
+        # sampled evenly in time: like a person turning slowly and taking a
+        # photo every few seconds, so neighbouring photos overlap. (Photos
+        # chosen one per 60-degree sector did not overlap and VGGT could not
+        # fit them together.)
+        stays, current = [], [inside[0]] if inside else []
+        for i in inside[1:]:
+            if i - current[-1] <= 60:
+                current.append(i)
+            else:
+                stays.append(current)
+                current = [i]
+        if current:
+            stays.append(current)
+        stay = max(stays, key=len) if stays else []
         picks = []
-        for k in range(PER_ROOM):
-            sector = [i for i in inside if int(headings[i] // (360 / PER_ROOM)) == k]
-            if sector:
-                picks.append(max(sector, key=lambda i: scores[i]))
-        # Too few directions seen: fill with the sharpest remaining frames, spread in time.
-        for i in sorted(set(inside) - set(picks), key=lambda i: -scores[i]):
-            if len(picks) >= PER_ROOM:
-                break
-            if all(abs(i - j) > 60 for j in picks):
-                picks.append(i)
+        for window in np.array_split(np.array(stay), PER_ROOM) if stay else []:
+            if len(window):
+                picks.append(int(max(window, key=lambda i: scores[i])))
         picks.sort()
         for n, i in enumerate(picks, start=1):
             chosen.setdefault(i, []).append((room["id"], f"photo_{n:02d}.jpg"))

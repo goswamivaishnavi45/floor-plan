@@ -9,7 +9,7 @@ The brief asks for a benchmark we build ourselves. What we have is the provided 
 | Capture | Content | Used as |
 |---|---|---|
 | `c00a170fe1` | 37 s, part of the apartment | LiDAR tier, video tier (its `rgb.mp4`) |
-| `1a8384c3f6` | 87 s, whole apartment, camera pointed down (floor only) | LiDAR tier, repeatability capture A |
+| `1a8384c3f6` | 115 s, whole apartment, camera pointed down (floor only) | LiDAR tier, repeatability capture A |
 | `c7d28f72c6` | 162 s, whole apartment, ceiling covered | LiDAR tier, repeatability capture B, photo tier (photos cut from its video) |
 
 Required by the brief and **not available**, so the matching gates are reported as not measured rather than estimated:
@@ -76,7 +76,7 @@ ARKit's own drift on these captures is about 1-2 cm. The floor anchor keeps the 
 | Run | Time |
 |---|---|
 | LiDAR `c00a170fe1` (37 s capture) | 38 s, plus ~3.5 min damage search |
-| LiDAR `1a8384c3f6` (87 s) | 81 s, plus damage |
+| LiDAR `1a8384c3f6` (115 s) | 81 s, plus damage |
 | LiDAR `c7d28f72c6` (162 s) | 126 s, plus damage |
 | Video `c00a170fe1/rgb.mp4` | 5.3 min, plus damage |
 | Photo, 5 rooms x 9-11 photos | 20 min (VGGT ~3 min per room), plus damage |

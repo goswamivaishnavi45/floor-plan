@@ -26,7 +26,7 @@ Required by the brief and **not available**, so the matching gates are reported 
 | Opening widths <= 2 cm on >= 85% | all | No ground truth. Doorway widths are reported with a +-4 cm range (wall ends found on 5 cm steps) | not measured |
 | Ceiling height <= 1.5 cm per room | LiDAR | No ground truth. Per-room ceilings found where the ceiling was seen (c7d28f72c6: 2.29-3.08 m, +-2 cm reported) | not measured |
 | Ceiling spread across captures <= 1 cm | LiDAR | Only one capture saw the ceiling (`1a8384c3f6` reports "not seen" in every room, by design) | not measurable |
-| Repeatability within 1 cm or 0.5% per wall | LiDAR | Walls: 0.55 cm median difference, 4 of 8 within 1 cm. Room dimensions: 1 of 14 (7%) | **fail** (fix loop) |
+| Repeatability within 1 cm or 0.5% per wall | LiDAR | Walls used as room sides: 2.1 cm median difference. Room dimensions: 2 of 14 (14%) | **fail** (fix loop + follow-up) |
 | Drift accountability, on/off ablation | LiDAR | Implemented (floor-anchored chunks); ablation below | done |
 | Photo-tier whole-property stitch, +-8% | photo | Rooms linked correctly (4 of 4 doorways); no room passed the quality gate, so no stitched dimensions | **fail** |
 | Wall lengths +-8% (photo) / +-3% (video) | photo, video | No room measured on either tier | **fail** |
@@ -36,14 +36,15 @@ Required by the brief and **not available**, so the matching gates are reported 
 
 `python scripts/repeatability.py outputs/1a8384c3f6 outputs/c7d28f72c6` after `run.py` on both captures. Full table: `benchmark/repeatability.md` (current pipeline); before and after the fix loop: `fixloop/before/`, `fixloop/after/`.
 
-| | Before fix | After fix (current) |
-|---|---|---|
-| Rooms found (A / B) | 5 / 5 | 9 / 8 |
-| Rooms matched | 3 | 7 |
-| Room dimensions within gate | 1 of 6 (17%) | 1 of 14 (7%) |
-| Walls in both, median position difference | 0.5 cm (13 walls) | 0.55 cm (8 walls) |
+| | Before fix | After fix | Follow-up (current) |
+|---|---|---|---|
+| Rooms found (A / B) | 5 / 5 | 9 / 8 | 9 / 8 |
+| Rooms matched | 3 | 7 | 7 |
+| Room dimensions within gate | 1 of 6 (17%) | 1 of 14 (7%) | 2 of 14 (14%) |
+| Room-side walls in both, median position difference | 0.5 cm (13 walls) | 0.55 cm (8 walls) | 2.1 cm (10 walls) |
+| Room sides with no wall (A / B) | | 12 of 36 / 5 of 32 | 10 of 36 / 4 of 32 |
 
-Walls are measured consistently; room sizes are not, because a room side without a detected wall falls back to the edge of the seen floor (9 of 28 sides in the floor-only capture). See `fixloop/postmortem.md`.
+The fix loop (narrow-passage room split) made rooms match; the follow-up (the post-mortem's next fix: each room side is the wall that bounds the grown room along most of that side, with the room on one side only, instead of the wall nearest the painted floor edge) raised repeatable dimensions from 1 to 2 of 14. The wall-median row compares the walls rooms picked as sides, so it changes with the rule; wall detection itself is unchanged. The remaining differences (0.1-2.4 m) come mostly from the two captures still dividing some rooms differently (R6/R8 overlap 0.33). See `fixloop/postmortem.md`.
 
 ## Drift ablation (LiDAR)
 

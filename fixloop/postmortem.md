@@ -27,6 +27,8 @@ Matching rooms only exposes the next problem: how a room's size is measured once
 
 The prediction assumed room sides would come from the same walls once rooms matched, so the remaining error would be the wall-to-wall difference (0.5 cm median). That assumption was not checked before predicting; checking how many sides fall back to the painted edge would have shown it.
 
-## Next fix (not shipped)
+## Next fix (shipped after the fix loop as a follow-up)
 
 Take room sides only from walls that bound the grown room region (walls the room's cells actually touch), prefer the longest such wall per side, and report a side as unmeasured instead of falling back to the painted edge. That removes both effects; walls themselves repeat within about 0.5 cm.
+
+Follow-up result (not part of the declared fix; `benchmark/repeatability.md`): rooms matched 7, room dimensions within the gate 2 of 14 (14%, from 7%), room sides without a wall 10 of 36 and 4 of 32 (from 12 and 5). R4's length now agrees (2.864 vs 2.878 m) but its width still differs by 1.48 m; the remaining differences are mostly rooms divided differently between the captures.

@@ -72,9 +72,14 @@ MIN_SECOND_LEVEL_SEEN = 0.10    # a second ceiling level must cover 10% of the r
 # measurements of these rooms yet.
 SURFACE_SIGMA = 0.005    # m, sensor bias left in one fitted wall/floor/ceiling surface
 MIN_DRIFT_SIGMA = 0.003  # m, drift floor even when room floors agree perfectly
-SIDE_SEARCH = 0.30       # a room side's wall must be within 30 cm of the painted edge
-MISSING_SIDE_SIGMA = 0.05   # m, when no wall was found for a side we use the painted
-                            # edge, which is only good to a few 5 cm squares
+SIDE_REACH = 0.15        # a wall bounds a room if room squares lie within 15 cm of it
+                         # on the room's side (the wall itself is drawn 2 squares thick)
+MIN_SIDE_OVERLAP = 0.5   # ... along at least half of the wall's length inside the
+                         # room's extent; shorter contact is a corner or a passing wall
+MAX_BEYOND = 0.10        # ... and at most 10% of the room's squares lie beyond it (a
+                         # doorway nub); otherwise it is an inner corner or notch, not a side
+MISSING_SIDE_SIGMA = 0.05   # m, when no wall bounds a side the painted edge is kept only
+                            # to draw the outline; it is good to a few 5 cm squares at best
 LOW_COVER_SIGMA = 0.01   # m, extra for a ceiling seen over less than half the room
 RECTANGLE_FILL = 0.8     # painted area must fill 80% of the wall rectangle to call
                          # the room rectangular; otherwise the area comes from the paint
@@ -502,12 +507,73 @@ def wall_sigma(wall):
     return float(np.hypot(SURFACE_SIGMA, scatter / np.sqrt(wall["points"])))
 
 
+def bounding_walls(grid, room_labels, room_id, walls):
+    """Walls that bound the grown room region, per side.
+
+    Follow each wall in ALONG_CELL steps over the part of it that lies within
+    the room's extent, and look up to SIDE_REACH to either side of it for
+    squares of this room. A wall at x with room squares on its +x side is the
+    room's left side, on its -x side its right side (front/back likewise for
+    walls at z). It bounds that side if room squares are next to it on that
+    side, and not on the other, along at least MIN_SIDE_OVERLAP of the
+    stretch, and at most MAX_BEYOND of the room lies past it.
+    Returns {side: [(overlap m, wall)]}.
+    """
+    inside = room_labels == room_id
+    rows, cols = np.nonzero(inside)
+    x = grid.origin[0] + (cols + 0.5) * GRID
+    z = grid.origin[1] + (rows + 0.5) * GRID
+    reach = int(round(SIDE_REACH / GRID))
+    found = {"left": [], "right": [], "front": [], "back": []}
+    for n, w in enumerate(walls):
+        # The room's extent along the wall, and the room sides it can be.
+        if w["axis"] == "x":
+            room_lo, room_hi, sides = z.min(), z.max(), (("left", 1), ("right", -1))
+        else:
+            room_lo, room_hi, sides = x.min(), x.max(), (("front", 1), ("back", -1))
+        lo = max(w["start"], room_lo - GRID / 2)
+        hi = min(w["end"], room_hi + GRID / 2)
+        if hi - lo < ALONG_CELL:
+            continue   # the wall does not reach along the room at all
+        along = np.arange(lo + ALONG_CELL / 2, hi, ALONG_CELL)
+        def touches(direction):
+            """Steps along the wall with room squares within SIDE_REACH on one side."""
+            touch = np.zeros(len(along), bool)
+            for k in range(1, reach + 1):
+                across = np.full(len(along), w["position"] + direction * k * GRID)
+                xz = np.column_stack((across, along) if w["axis"] == "x" else (along, across))
+                c, r = grid.cells(xz)
+                ok = (r >= 0) & (r < grid.shape[0]) & (c >= 0) & (c < grid.shape[1])
+                touch[ok] |= inside[r[ok], c[ok]]
+            return touch
+
+        plus, minus = touches(1), touches(-1)
+        across_room = x if w["axis"] == "x" else z
+        for side, direction in sides:
+            # Room on the inner side only: a wall with the same room on both
+            # sides stands inside it (a partition stub, a wardrobe side).
+            bounds = (plus & ~minus) if direction > 0 else (minus & ~plus)
+            # The wall must be the room's outer edge on this side, not the
+            # inner corner of an L or a notch: little of the room lies beyond it.
+            beyond = np.mean(direction * (across_room - w["position"]) < -SIDE_REACH)
+            if bounds.mean() >= MIN_SIDE_OVERLAP and beyond <= MAX_BEYOND:
+                found[side].append((float(bounds.sum() * ALONG_CELL), n))
+    return found
+
+
 def measure_rooms(grid, room_labels, rooms, walls):
     """Width, length, area and ceiling height per room, each with a 95% range.
 
     Sizes come from the walls, which are located to millimetres, not from the
     painted squares. For each side of the room (left, right, front, back) we
-    take the room's wall closest to the painted edge. Drift is estimated from
+    take the wall that bounds the grown room region on that side over the
+    longest stretch (bounding_walls()). A side with no bounding wall is
+    reported in missing_sides; its painted edge is kept only so the outline
+    can be drawn, with the wide MISSING_SIDE_SIGMA.
+    Fix loop (fixloop/postmortem.md): sides used to be the wall nearest the
+    painted edge within 30 cm, else the painted edge. The edge depends on how
+    much floor one capture saw, and the nearest wall could be a wardrobe front
+    in one capture and the room wall in the other. Drift is estimated from
     how much the room floors disagree within this recording: floors in one
     home are level, so their spread is a lower bound on the tracking drift.
     """
@@ -521,14 +587,16 @@ def measure_rooms(grid, room_labels, rooms, walls):
         edges = {"left": ("x", x.min()), "right": ("x", x.max()),
                  "front": ("z", z.min()), "back": ("z", z.max())}
 
+        bounding = bounding_walls(grid, room_labels, room["id"], walls)
         sides = {}
         for side, (axis, edge) in edges.items():
-            candidates = [n for n in room.get("walls", []) if walls[n]["axis"] == axis
-                          and abs(walls[n]["position"] - edge) <= SIDE_SEARCH]
-            if candidates:
-                n = min(candidates, key=lambda n: abs(walls[n]["position"] - edge))
+            if bounding[side]:
+                # The wall covering most of this side, not the one nearest the
+                # painted edge (that could be a wardrobe front).
+                _, n = max(bounding[side])
                 sides[side] = {"wall": n, "position": walls[n]["position"], "sigma": wall_sigma(walls[n])}
             else:
+                # Unmeasured: the painted edge only lets the outline be drawn.
                 sides[side] = {"wall": None, "position": float(edge), "sigma": MISSING_SIDE_SIGMA}
 
         def span(a, b):

@@ -22,7 +22,7 @@ Photo   room folders ──► VGGT per room ──► AI-depth size ──► q
 - *Walls:* a wall at one x (or z) is a spike in the strip histogram. Each spike is followed in 5 cm steps; a step counts only if its points reach half the band height (a sofa's seat and back do not). Holes up to 30 cm are bridged. A piece must be at least 40 cm long and thin: its ±2 cm core at least 1.5x denser than the strips 4-7 cm beside it, which rejects wardrobes and door frames. Its position is the median of its points, much finer than the 2 cm strip.
 - *Rooms:* everything seen at any height marks inside space (LiDAR cannot see through walls). Walls are drawn as barriers, then the free floor is shrunk by 45 cm so every doorway (0.7-0.9 m) closes, each island becomes a room seed, and the seeds are grown back so rooms meet at doorways (the fix-loop change, section 6). Gaps of 0.6-1.2 m between wall ends are recorded as doors.
 - *Heights:* per room, the floor is the median height of the room's points within ±8 cm of the rough floor. The ceiling is searched in 2 cm shelves at least 1.8 m above it. A ceiling is reported only if it was seen over 25% of the room. On `c7d28f72c6` ceilings range 2.29-3.08 m between rooms; one whole-home value would have been up to 72 cm wrong.
-- *Sizes:* each room side is the room's wall nearest the edge of its painted floor, falling back to that edge when no wall qualifies. Non-rectangular rooms get a right-angled outline snapped to walls within 15 cm.
+- *Sizes:* each room side is the wall that bounds the grown room along most of that side, with room cells on one side of it only. A side with no such wall is reported as missing, with a 5 cm sigma; the edge of the seen floor is used only to draw it. Non-rectangular rooms get a right-angled outline snapped to walls within 15 cm.
 
 ## 2. Tier design and device matrix
 
@@ -80,11 +80,12 @@ Declaration first (`fixloop/declaration.md`, commit `32c0ecf`), then the fix (`6
 - **Fix:** split rooms at narrow passages (erode 45 cm, seed, grow back), which depends only on the floor's shape.
 - **Prediction:** at least 4 rooms matched; about 50% of dimensions within the gate.
 - **Result:** rooms matched 3 → 7, so the cause was real and fixed. Dimensions 17% → 7%, so the prediction was badly wrong.
-- **Post-mortem:** matching rooms exposed the next cause. Room sides fall back to the edge of the seen floor when no wall is detected (9 of 28 sides in the floor-only capture vs 4 of 28), and the nearest-wall rule can pick different walls (R4 differs by 1.09 m with walls found on almost every side). I predicted from the wall-to-wall agreement without checking how sides are chosen. The next fix: take sides only from walls the grown room touches, prefer the longest, and report a side as unmeasured rather than fall back.
+- **Post-mortem:** matching rooms exposed the next cause. Room sides fall back to the edge of the seen floor when no wall is detected (9 of 28 sides in the floor-only capture vs 4 of 28), and the nearest-wall rule can pick different walls (R4 differs by 1.09 m with walls found on almost every side). I predicted from the wall-to-wall agreement without checking how sides are chosen.
+- **Follow-up (after the fix loop):** sides are now taken from walls that bound the grown room along most of the side. This raised repeatable dimensions from 1 to 2 of 14. The rest of the gap is rooms still divided differently in the two captures (R6/R8 overlap 0.33); R4's width still differs by 1.48 m.
 
 ## 7. Known failure modes
 
-1. **Room sizes are not repeatable** (section 6), though walls are.
+1. **Room sizes are not repeatable** (section 6: 2 of 14 dimensions within the gate), though wall detection is.
 2. **Glass, mirrors, windows:** low-confidence LiDAR returns are dropped, so glass walls go missing and rooms can leak through them; curtains make wavy walls.
 3. **Open plan and wide openings** (over 0.9 m) stay one room. Corridors under 0.9 m and cupboards are absorbed into neighbours.
 4. **Floor-only captures** cannot give ceiling heights; the output says "not seen".

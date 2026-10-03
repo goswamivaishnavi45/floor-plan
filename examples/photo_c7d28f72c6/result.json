@@ -1,0 +1,358 @@
+{
+  "schema_version": "1.0",
+  "capture": {
+    "id": "photos_c7d28f72c6",
+    "tier": "photo",
+    "source": "photo folders",
+    "processing_seconds": 1487.9
+  },
+  "units": "metres",
+  "rooms": [
+    {
+      "id": "R1",
+      "name": "R1",
+      "photos": 9,
+      "shape": "not measured",
+      "width": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "length": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "floor_area": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "walls": []
+    },
+    {
+      "id": "R2",
+      "name": "R2",
+      "photos": 11,
+      "shape": "not measured",
+      "width": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "length": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "floor_area": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 1 of 4 sides"
+      },
+      "walls": []
+    },
+    {
+      "id": "R3",
+      "name": "R3",
+      "photos": 10,
+      "shape": "not measured",
+      "width": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 0 of 4 sides"
+      },
+      "length": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 0 of 4 sides"
+      },
+      "floor_area": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 0 of 4 sides"
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 0 of 4 sides"
+      },
+      "walls": []
+    },
+    {
+      "id": "R4",
+      "name": "R4",
+      "photos": 9,
+      "shape": "not measured",
+      "width": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "length": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "floor_area": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "walls": []
+    },
+    {
+      "id": "R5",
+      "name": "R5",
+      "photos": 9,
+      "shape": "not measured",
+      "width": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "length": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "floor_area": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "ceiling_height": {
+        "value": null,
+        "pm95": null,
+        "note": "not measured: walls found on only 2 of 4 sides"
+      },
+      "walls": []
+    }
+  ],
+  "openings": [],
+  "adjacency": [
+    {
+      "rooms": [
+        "R1",
+        "R2"
+      ],
+      "via": "shared photo door_R1_R2.jpg"
+    },
+    {
+      "rooms": [
+        "R2",
+        "R3"
+      ],
+      "via": "shared photo door_R2_R3.jpg"
+    },
+    {
+      "rooms": [
+        "R2",
+        "R5"
+      ],
+      "via": "shared photo door_R2_R5.jpg"
+    },
+    {
+      "rooms": [
+        "R3",
+        "R4"
+      ],
+      "via": "shared photo door_R3_R4.jpg"
+    }
+  ],
+  "damage": [
+    {
+      "id": "D1",
+      "class": "crack",
+      "score": 0.43,
+      "room": "R1",
+      "surface": "R1-unknown",
+      "surface_type": "unknown",
+      "seen_in": "R1/photo_06.jpg",
+      "sightings": 3,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    },
+    {
+      "id": "D2",
+      "class": "water stain",
+      "score": 0.4,
+      "room": "R4",
+      "surface": "R4-unknown",
+      "surface_type": "unknown",
+      "seen_in": "R4/photo_05.jpg",
+      "sightings": 2,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    },
+    {
+      "id": "D3",
+      "class": "mould",
+      "score": 0.39,
+      "room": "R4",
+      "surface": "R4-unknown",
+      "surface_type": "unknown",
+      "seen_in": "R4/photo_02.jpg",
+      "sightings": 1,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    },
+    {
+      "id": "D4",
+      "class": "water stain",
+      "score": 0.31,
+      "room": "R3",
+      "surface": "R3-unknown",
+      "surface_type": "unknown",
+      "seen_in": "R3/photo_02.jpg",
+      "sightings": 1,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    },
+    {
+      "id": "D5",
+      "class": "water stain",
+      "score": 0.3,
+      "room": "R1",
+      "surface": "R1-unknown",
+      "surface_type": "unknown",
+      "seen_in": "R1/photo_02.jpg",
+      "sightings": 1,
+      "width": {
+        "value": null,
+        "pm95": null
+      },
+      "height": {
+        "value": null,
+        "pm95": null
+      },
+      "area": {
+        "value": null,
+        "pm95": null
+      }
+    }
+  ],
+  "concealed_damage_flags": [
+    {
+      "damage": "D3",
+      "rule": "C3",
+      "condition": "mould anywhere",
+      "flag": "hidden moisture likely behind or around the surface",
+      "surface": "R4-unknown"
+    }
+  ],
+  "scope": [
+    {
+      "id": "S1",
+      "surface": "R1-unknown",
+      "damage": "D1",
+      "action": "Rake out, fill and repaint crack",
+      "quantity": null,
+      "unit": "m"
+    },
+    {
+      "id": "S2",
+      "surface": "R4-unknown",
+      "damage": "D2",
+      "action": "Stain-block primer and repaint",
+      "quantity": null,
+      "unit": "m2"
+    },
+    {
+      "id": "S3",
+      "surface": "R4-unknown",
+      "damage": "D3",
+      "action": "Mould treatment, stain-block and repaint",
+      "quantity": null,
+      "unit": "m2"
+    },
+    {
+      "id": "S4",
+      "surface": "R3-unknown",
+      "damage": "D4",
+      "action": "Stain-block primer and repaint",
+      "quantity": null,
+      "unit": "m2"
+    },
+    {
+      "id": "S5",
+      "surface": "R1-unknown",
+      "damage": "D5",
+      "action": "Stain-block primer and repaint",
+      "quantity": null,
+      "unit": "m2"
+    }
+  ],
+  "warnings": [
+    "Photo tier: rooms are reconstructed from their photos with VGGT and given a size with an AI depth model; a room's numbers are reported only if it passes a quality check, otherwise it is listed as not measured. Rooms are not placed relative to each other; plan.png is a schematic.",
+    "R1 (R1): not measured: walls found on only 1 of 4 sides.",
+    "R2 (R2): not measured: walls found on only 1 of 4 sides.",
+    "R3 (R3): not measured: walls found on only 0 of 4 sides.",
+    "R4 (R4): not measured: walls found on only 2 of 4 sides.",
+    "R5 (R5): not measured: walls found on only 2 of 4 sides.",
+    "Damage: 5 region(s) found by an open-vocabulary detector (OWLv2) on sharp frames; not validated on staged damage."
+  ],
+  "property": {
+    "room_count": 5,
+    "total_floor_area": {
+      "value": null,
+      "pm95": null,
+      "note": "sum over 0 of 5 rooms (the rest not measured)"
+    }
+  }
+}

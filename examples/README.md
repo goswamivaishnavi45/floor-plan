@@ -11,3 +11,5 @@ What `python run.py <capture>` produced on the sample data with the code in this
 | `photo_c7d28f72c6/` | `python run.py data/photos_c7d28f72c6` | photo (folders made by `scripts/make_photo_folders.py c7d28f72c6`) |
 
 Read the `warnings` list in each `result.json`: it says what was not measured and why. Sizes are `{"value", "pm95"}`, a 95% range. See `BENCHMARK.md` for how these numbers compare between captures.
+
+**Damage in these examples is false alarms.** The sample apartment shows no visible damage; the detector reported wall-ceiling corners as cracks (`lidar_c7d28f72c6`, rule C4) and a few surfaces as mould or water stain at scores near the 0.30 threshold. See `BENCHMARK.md` (component checks).

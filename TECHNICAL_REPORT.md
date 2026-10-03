@@ -94,7 +94,7 @@ Declaration first (`fixloop/declaration.md`, commit `32c0ecf`), then the fix (`6
 7. **Video:** plain walls fragment COLMAP. No complete room on our video; segments are not stitched.
 8. **Photo:** VGGT misplaces photos spread around a plain-walled room; rooms come out "not measured". Real overlapping photos taken per the protocol may do better; untested.
 9. **AI-depth size bias** (1.35x) was measured on one apartment only.
-10. **Damage:** on 3 phone photos of real damage the detector found 3 areas, missed 1 and raised 2 false alarms (a door frame as a crack, a clean panel as peeling paint); not validated on staged damage in a capture. Sizes are box-based (±15%) and assume a frontal view; video and photo tiers give no size.
+10. **Damage:** on 3 phone photos of real damage the detector found 3 areas, missed 1 and raised 2 false alarms (a door frame as a crack, a clean panel as peeling paint). On the undamaged sample apartment it reports wall-ceiling corners as cracks (score up to 0.50, above the real damage at 0.38-0.42), so its flags need human review; not validated on staged damage in a capture. Sizes are box-based (±15%) and assume a frontal view; video and photo tiers give no size.
 11. **Multi-storey homes:** one plan for all floors; stairs are not modelled.
 12. **Speed on CPU:** photo tier about 3 min per room, damage about 10 s per frame.
 
